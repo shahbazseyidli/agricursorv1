@@ -120,11 +120,14 @@ export function MarketBriefClient({
     product?: { name: string; slug: string };
     chartData: Array<{
       source: string;
+      sourceUrl: string;
+      priceType: string;
       country: string;
       price: number;
       unit: string;
       currency: string;
       year: number;
+      period?: number;
       priceInAZN: number;
     }>;
   } | null>(null);
@@ -421,13 +424,14 @@ export function MarketBriefClient({
                           <div className="space-y-2">
                             {chartData.chartData.map((item, index) => (
                               <div key={index} className="flex items-center gap-3">
-                                <div className="w-28 text-xs text-slate-300 truncate" title={item.country}>
-                                  {item.country}
+                                <div className="w-32 text-xs text-slate-300 truncate" title={`${item.country} - ${item.priceType}`}>
+                                  <span className="font-medium">{item.country}</span>
+                                  <span className="text-slate-500 ml-1">({item.year})</span>
                                 </div>
                                 <div className="flex-1 relative h-8 bg-slate-800 rounded overflow-hidden">
                                   <div
                                     className={`absolute inset-y-0 left-0 rounded transition-all duration-500 ${
-                                      item.source === "AZ Local"
+                                      item.source === "Agro.gov.az"
                                         ? "bg-gradient-to-r from-emerald-600 to-emerald-500"
                                         : item.source === "EUROSTAT"
                                         ? "bg-gradient-to-r from-blue-600 to-blue-500"
@@ -437,34 +441,44 @@ export function MarketBriefClient({
                                   />
                                   <div className="absolute inset-0 flex items-center px-2">
                                     <span className="text-xs font-bold text-white drop-shadow">
-                                      {item.priceInAZN.toFixed(2)} AZN
+                                      {item.priceInAZN.toFixed(2)} AZN/kg
                                     </span>
                                   </div>
                                 </div>
-                                <div className="w-20 text-xs text-slate-500">
+                                <a 
+                                  href={item.sourceUrl} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="w-24 text-xs text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1"
+                                  title={item.priceType}
+                                >
                                   {item.source}
-                                </div>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
                               </div>
                             ))}
                           </div>
 
-                          <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-700">
+                          <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-slate-700">
                             <div className="flex items-center gap-1">
                               <div className="w-3 h-3 rounded bg-emerald-500" />
-                              <span className="text-xs text-slate-400">AZ Local</span>
+                              <span className="text-xs text-slate-400">Agro.gov.az - Sahə qiyməti</span>
                             </div>
                             <div className="flex items-center gap-1">
                               <div className="w-3 h-3 rounded bg-blue-500" />
-                              <span className="text-xs text-slate-400">EUROSTAT</span>
+                              <span className="text-xs text-slate-400">EUROSTAT - İstehsalçı qiyməti</span>
                             </div>
                             <div className="flex items-center gap-1">
                               <div className="w-3 h-3 rounded bg-amber-500" />
-                              <span className="text-xs text-slate-400">FAOSTAT</span>
+                              <span className="text-xs text-slate-400">FAOSTAT - İstehsalçı qiyməti</span>
                             </div>
                           </div>
 
                           <p className="text-xs text-slate-500 mt-2">
-                            * Qiymətlər AZN/kq-a çevrilmişdir (1 EUR ≈ 1.85 AZN, 1 USD ≈ 1.70 AZN)
+                            * Bütün qiymətlər AZN/kg-a çevrilmişdir (1 EUR ≈ 1.85 AZN, 1 USD ≈ 1.70 AZN)
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            * EUROSTAT və FAOSTAT &quot;İstehsalçı qiyməti&quot; (Producer Price), Agro.gov.az &quot;Sahə qiyməti&quot; (Farmgate) göstərir
                           </p>
                         </div>
                       )}

@@ -12,7 +12,14 @@ const client = new OpenAI({
 });
 
 // Compact multilingual system prompt - STRICT DATA ONLY
-const SYSTEM_PROMPT = `Agricultural price analyst. ONLY use the [DATA] provided. If no data for a product, say "Bu məhsul üzrə datamız yoxdur" (or equivalent in user's language). Never invent prices. Reply in user's language. Be brief, use numbers. For comparisons use **bold** for key numbers.`;
+const SYSTEM_PROMPT = `Agricultural price analyst. STRICT RULES:
+1. ONLY use the [DATA] provided. If no data for a product, say "Bu məhsul üzrə datamız yoxdur".
+2. Never invent prices or data.
+3. ALWAYS include year with each price (e.g., "1.47 AZN/kg (2025)").
+4. ALWAYS mention data source: Agro.gov.az (AZ), EUROSTAT (EU), FAOSTAT (FAO).
+5. Specify price type: İstehsalçı qiyməti (Producer), Sahə qiyməti (Farmgate), Pərakəndə (Retail).
+6. Use **bold** for key numbers.
+7. Reply in user's language. Be brief and factual.`;
 
 // Extract relevant keywords from query
 function extractKeywords(query: string): string[] {

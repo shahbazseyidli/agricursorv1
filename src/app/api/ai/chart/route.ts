@@ -41,11 +41,14 @@ function extractKeywords(query: string): string[] {
 
 interface ChartDataPoint {
   source: string;
+  sourceUrl: string; // Link to data source
+  priceType: string; // Producer/Farmgate/Wholesale/Retail
   country: string;
   price: number;
   unit: string;
   currency: string;
   year: number;
+  period?: number; // Week or month number
   priceInAZN: number; // Converted to AZN for comparison
 }
 
@@ -118,12 +121,17 @@ export async function POST(request: NextRequest) {
     if (azAggregates.length > 0) {
       const latestAz = azAggregates[0];
       chartData.push({
-        source: "AZ Local",
+        source: "Agro.gov.az",
+        sourceUrl: "https://agro.gov.az",
+        priceType: latestAz.marketTypeCode === "FARMGATE" ? "Sahə qiyməti" : 
+                   latestAz.marketTypeCode === "RETAIL" ? "Pərakəndə" :
+                   latestAz.marketTypeCode === "WHOLESALE" ? "Topdan" : "İstehsalçı",
         country: "Azərbaycan",
         price: latestAz.avgPrice,
         unit: "kg",
         currency: "AZN",
         year: latestAz.year,
+        period: latestAz.period,
         priceInAZN: latestAz.avgPrice, // Already in AZN/kg
       });
     }
@@ -139,6 +147,8 @@ export async function POST(request: NextRequest) {
       
       chartData.push({
         source: "EUROSTAT",
+        sourceUrl: "https://ec.europa.eu/eurostat",
+        priceType: "İstehsalçı qiyməti", // Producer price
         country: eu.country.nameAz || eu.country.nameEn,
         price: eu.price,
         unit: "100kg",
@@ -159,6 +169,8 @@ export async function POST(request: NextRequest) {
       
       chartData.push({
         source: "FAOSTAT",
+        sourceUrl: "https://www.fao.org/faostat",
+        priceType: "İstehsalçı qiyməti", // Producer price
         country: fao.country.nameAz || fao.country.nameEn,
         price: fao.price,
         unit: "ton",
