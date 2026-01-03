@@ -17,6 +17,8 @@ import {
   X,
   Brain,
   MessageSquare,
+  BarChart2,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -113,6 +115,19 @@ export function MarketBriefClient({
   const [isSearching, setIsSearching] = useState(false);
   const [streamingAnswer, setStreamingAnswer] = useState("");
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [responseMode, setResponseMode] = useState<"text" | "chart">("text");
+  const [chartData, setChartData] = useState<{
+    product?: { name: string; slug: string };
+    chartData: Array<{
+      source: string;
+      country: string;
+      price: number;
+      unit: string;
+      currency: string;
+      year: number;
+      priceInAZN: number;
+    }>;
+  } | null>(null);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -120,46 +135,63 @@ export function MarketBriefClient({
     setIsSearching(true);
     setSearchError(null);
     setStreamingAnswer("");
+    setChartData(null);
 
     try {
-      // Use streaming API for instant response
-      const response = await fetch("/api/ai/stream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: searchQuery }),
-      });
+      if (responseMode === "chart") {
+        // Chart mode - get structured data
+        const response = await fetch("/api/ai/chart", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: searchQuery }),
+        });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Xəta baş verdi");
-      }
+        const data = await response.json();
 
-      // Read streaming response
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "Xəta baş verdi");
+        }
 
-      if (!reader) {
-        throw new Error("Stream reader unavailable");
-      }
+        setChartData(data);
+      } else {
+        // Text mode - streaming response
+        const response = await fetch("/api/ai/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: searchQuery }),
+        });
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || "Xəta baş verdi");
+        }
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n").filter((line) => line.startsWith("data: "));
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
 
-        for (const line of lines) {
-          const data = line.replace("data: ", "").trim();
-          if (data === "[DONE]") continue;
-          
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.content) {
-              setStreamingAnswer((prev) => prev + parsed.content);
+        if (!reader) {
+          throw new Error("Stream reader unavailable");
+        }
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split("\n").filter((line) => line.startsWith("data: "));
+
+          for (const line of lines) {
+            const data = line.replace("data: ", "").trim();
+            if (data === "[DONE]") continue;
+            
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.content) {
+                setStreamingAnswer((prev) => prev + parsed.content);
+              }
+            } catch {
+              // Skip invalid JSON
             }
-          } catch {
-            // Skip invalid JSON
           }
         }
       }
@@ -181,7 +213,13 @@ export function MarketBriefClient({
     setSearchQuery("");
     setStreamingAnswer("");
     setSearchError(null);
+    setChartData(null);
   };
+
+  // Get max price for chart scaling
+  const maxPrice = chartData?.chartData.length 
+    ? Math.max(...chartData.chartData.map(d => d.priceInAZN))
+    : 0;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -294,13 +332,40 @@ export function MarketBriefClient({
                   </Button>
                 </div>
               </div>
-              <p className="text-xs text-slate-400 mt-2">
-                <Sparkles className="w-3 h-3 inline mr-1" />
-                DeepSeek R1 AI ilə gücləndirilmiş analiz
-              </p>
+              <div className="flex items-center justify-center gap-4 mt-3">
+                {/* Mode toggle */}
+                <div className="flex items-center gap-1 bg-white/10 rounded-lg p-1">
+                  <button
+                    onClick={() => setResponseMode("text")}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      responseMode === "text"
+                        ? "bg-emerald-500 text-white"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    Mətn
+                  </button>
+                  <button
+                    onClick={() => setResponseMode("chart")}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      responseMode === "chart"
+                        ? "bg-emerald-500 text-white"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <BarChart2 className="w-3.5 h-3.5" />
+                    Qrafik
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400">
+                  <Sparkles className="w-3 h-3 inline mr-1" />
+                  DeepSeek AI
+                </p>
+              </div>
 
               {/* AI Search Result */}
-              {(streamingAnswer || searchError || isSearching) && (
+              {(streamingAnswer || searchError || isSearching || chartData) && (
                 <div className="mt-6 text-left">
                   <Card className="bg-white/10 backdrop-blur-sm border-white/20">
                     <CardContent className="p-6">
@@ -318,6 +383,7 @@ export function MarketBriefClient({
                         </div>
                       )}
                       
+                      {/* Text Response */}
                       {streamingAnswer && (
                         <div className="space-y-4">
                           <div className="flex items-start gap-3">
@@ -329,15 +395,77 @@ export function MarketBriefClient({
                                 className="text-white whitespace-pre-wrap leading-relaxed ai-response"
                                 dangerouslySetInnerHTML={{ 
                                   __html: streamingAnswer
-                                    // Convert **bold** to styled spans
                                     .replace(/\*\*([^*]+)\*\*/g, '<span class="font-bold text-emerald-400">$1</span>')
-                                    // Convert *italic* to styled spans
                                     .replace(/\*([^*]+)\*/g, '<em class="text-slate-300">$1</em>')
                                 }}
                               />
                               {isSearching && <span className="inline-block w-2 h-4 ml-1 bg-emerald-400 animate-pulse" />}
                             </div>
                           </div>
+                        </div>
+                      )}
+
+                      {/* Chart Response */}
+                      {chartData && chartData.chartData.length > 0 && (
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-2 mb-4">
+                            <BarChart2 className="w-5 h-5 text-emerald-400" />
+                            <h3 className="text-lg font-semibold text-white">
+                              {chartData.product?.name} - Qiymət Müqayisəsi
+                            </h3>
+                            <Badge variant="outline" className="text-xs text-slate-400 border-slate-600">
+                              AZN/kq
+                            </Badge>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            {chartData.chartData.map((item, index) => (
+                              <div key={index} className="flex items-center gap-3">
+                                <div className="w-28 text-xs text-slate-300 truncate" title={item.country}>
+                                  {item.country}
+                                </div>
+                                <div className="flex-1 relative h-8 bg-slate-800 rounded overflow-hidden">
+                                  <div
+                                    className={`absolute inset-y-0 left-0 rounded transition-all duration-500 ${
+                                      item.source === "AZ Local"
+                                        ? "bg-gradient-to-r from-emerald-600 to-emerald-500"
+                                        : item.source === "EUROSTAT"
+                                        ? "bg-gradient-to-r from-blue-600 to-blue-500"
+                                        : "bg-gradient-to-r from-amber-600 to-amber-500"
+                                    }`}
+                                    style={{ width: `${(item.priceInAZN / maxPrice) * 100}%` }}
+                                  />
+                                  <div className="absolute inset-0 flex items-center px-2">
+                                    <span className="text-xs font-bold text-white drop-shadow">
+                                      {item.priceInAZN.toFixed(2)} AZN
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="w-20 text-xs text-slate-500">
+                                  {item.source}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-700">
+                            <div className="flex items-center gap-1">
+                              <div className="w-3 h-3 rounded bg-emerald-500" />
+                              <span className="text-xs text-slate-400">AZ Local</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <div className="w-3 h-3 rounded bg-blue-500" />
+                              <span className="text-xs text-slate-400">EUROSTAT</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <div className="w-3 h-3 rounded bg-amber-500" />
+                              <span className="text-xs text-slate-400">FAOSTAT</span>
+                            </div>
+                          </div>
+
+                          <p className="text-xs text-slate-500 mt-2">
+                            * Qiymətlər AZN/kq-a çevrilmişdir (1 EUR ≈ 1.85 AZN, 1 USD ≈ 1.70 AZN)
+                          </p>
                         </div>
                       )}
                     </CardContent>
