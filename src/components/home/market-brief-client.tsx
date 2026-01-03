@@ -277,134 +277,294 @@ export function MarketBriefClient({
       </header>
 
       {/* Hero Section with Search */}
-      <section className="pt-24 pb-12 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center py-12">
-            <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-              Bazar trendlərini kəşf edin
+      <section className="pt-24 pb-16 min-h-[70vh] relative overflow-hidden">
+        {/* Animated gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-emerald-950/30 to-slate-950" />
+        <div className="absolute inset-0 opacity-30">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-teal-500/15 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }} />
+          <div className="absolute top-1/2 right-1/3 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "2s" }} />
+        </div>
+        
+        {/* Grid pattern overlay */}
+        <div className="absolute inset-0 opacity-[0.02]" style={{
+          backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
+          backgroundSize: '50px 50px'
+        }} />
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="text-center py-8 md:py-16">
+            
+            {/* Agrai Logo & Brand */}
+            <div className="inline-flex items-center gap-2 mb-6 px-4 py-2 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 rounded-full border border-emerald-500/20 backdrop-blur-sm">
+              <div className="relative">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/25">
+                  <Sparkles className="w-4 h-4 text-white" />
+                </div>
+                <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full animate-ping" />
+              </div>
+              <span className="text-lg font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
+                Agrai
+              </span>
+              <span className="text-xs text-slate-400 font-medium px-2 py-0.5 bg-white/5 rounded-full">
+                BETA
+              </span>
+            </div>
+
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
+              <span className="text-white">Kənd təsərrüfatı üçün</span>
+              <br />
+              <span className="bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 bg-clip-text text-transparent animate-gradient">
+                süni intellekt
+              </span>
             </h1>
-            <p className="text-lg text-slate-300 mb-8 max-w-2xl mx-auto">
-              Azərbaycan və dünya bazarlarında kənd təsərrüfatı məhsullarının qiymət 
-              analizi, müqayisəsi və proqnozlaşdırılması
+            
+            <p className="text-lg md:text-xl text-slate-400 mb-10 max-w-2xl mx-auto leading-relaxed">
+              Real-time bazar qiymətləri, trend analizləri və 
+              <span className="text-emerald-400 font-medium"> 50+ ölkənin</span> məlumatları bir sorğuda
             </p>
 
-            {/* AI Search Box */}
+            {/* Premium AI Search Box */}
             <div className="max-w-3xl mx-auto">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  {isSearching ? (
-                    <Loader2 className="h-5 w-5 text-emerald-400 animate-spin" />
-                  ) : (
-                    <Brain className="h-5 w-5 text-emerald-400" />
-                  )}
-                </div>
-                <input
-                  type="text"
-                  className="block w-full pl-12 pr-28 py-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-lg"
-                  placeholder="Soruşun: 'Alma qiymətləri bu il necə dəyişib?'"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  disabled={isSearching}
-                />
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center gap-1">
-                  {searchQuery && (
-                    <Button 
-                      size="sm" 
-                      variant="ghost"
-                      className="text-slate-400 hover:text-white rounded-xl h-8 w-8 p-0"
-                      onClick={clearSearch}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  )}
-                  <Button 
-                    size="sm" 
-                    className="bg-emerald-500 hover:bg-emerald-600 rounded-xl"
-                    onClick={handleSearch}
-                    disabled={isSearching || !searchQuery.trim()}
-                  >
-                    {isSearching ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <>
-                        <Search className="w-4 h-4 mr-1" />
-                        Axtar
-                      </>
-                    )}
-                  </Button>
+              <div className="relative group">
+                {/* Glow effect */}
+                <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500/50 via-teal-500/50 to-cyan-500/50 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-500" />
+                
+                <div className="relative bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden shadow-2xl shadow-emerald-500/5">
+                  <div className="flex items-center">
+                    {/* AI Icon with pulse */}
+                    <div className="pl-5 pr-3 py-4">
+                      <div className="relative">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${
+                          isSearching 
+                            ? "bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/40" 
+                            : "bg-gradient-to-br from-emerald-500/20 to-teal-500/20 group-hover:from-emerald-500/30 group-hover:to-teal-500/30"
+                        }`}>
+                          {isSearching ? (
+                            <div className="relative">
+                              <Loader2 className="w-5 h-5 text-white animate-spin" />
+                            </div>
+                          ) : (
+                            <Brain className="w-5 h-5 text-emerald-400 group-hover:text-emerald-300 transition-colors" />
+                          )}
+                        </div>
+                        {isSearching && (
+                          <div className="absolute inset-0 rounded-xl bg-emerald-500/50 animate-ping" />
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Input */}
+                    <input
+                      type="text"
+                      className="flex-1 bg-transparent py-5 text-white text-lg placeholder-slate-500 focus:outline-none"
+                      placeholder="Agrai-dən soruşun..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      disabled={isSearching}
+                    />
+                    
+                    {/* Actions */}
+                    <div className="pr-3 flex items-center gap-2">
+                      {searchQuery && !isSearching && (
+                        <button 
+                          className="p-2 text-slate-500 hover:text-white rounded-lg hover:bg-white/5 transition-all"
+                          onClick={clearSearch}
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      )}
+                      
+                      {/* Mode toggle - compact */}
+                      <div className="flex items-center gap-0.5 p-1 bg-white/5 rounded-lg">
+                        <button
+                          onClick={() => setResponseMode("text")}
+                          className={`p-2 rounded-md transition-all ${
+                            responseMode === "text"
+                              ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
+                              : "text-slate-400 hover:text-white hover:bg-white/5"
+                          }`}
+                          title="Mətn cavabı"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setResponseMode("chart")}
+                          className={`p-2 rounded-md transition-all ${
+                            responseMode === "chart"
+                              ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
+                              : "text-slate-400 hover:text-white hover:bg-white/5"
+                          }`}
+                          title="Qrafik cavabı"
+                        >
+                          <BarChart2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      
+                      {/* Search button */}
+                      <button 
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all ${
+                          isSearching || !searchQuery.trim()
+                            ? "bg-slate-700 text-slate-500 cursor-not-allowed"
+                            : "bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:shadow-lg hover:shadow-emerald-500/25 hover:scale-105 active:scale-95"
+                        }`}
+                        onClick={handleSearch}
+                        disabled={isSearching || !searchQuery.trim()}
+                      >
+                        {isSearching ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Analiz...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4" />
+                            <span>Axtar</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center justify-center gap-4 mt-3">
-                {/* Mode toggle */}
-                <div className="flex items-center gap-1 bg-white/10 rounded-lg p-1">
+              
+              {/* Quick suggestions */}
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+                <span className="text-xs text-slate-500">Cəhd edin:</span>
+                {["Alma qiymətləri", "Pomidor trendi", "Kartof Avropa ilə müqayisə"].map((suggestion) => (
                   <button
-                    onClick={() => setResponseMode("text")}
-                    className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      responseMode === "text"
-                        ? "bg-emerald-500 text-white"
-                        : "text-slate-400 hover:text-white"
-                    }`}
+                    key={suggestion}
+                    onClick={() => {
+                      setSearchQuery(suggestion);
+                    }}
+                    className="px-3 py-1.5 text-xs text-slate-400 hover:text-emerald-400 bg-white/5 hover:bg-emerald-500/10 rounded-full border border-transparent hover:border-emerald-500/20 transition-all"
                   >
-                    <MessageCircle className="w-3.5 h-3.5" />
-                    Mətn
+                    {suggestion}
                   </button>
-                  <button
-                    onClick={() => setResponseMode("chart")}
-                    className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      responseMode === "chart"
-                        ? "bg-emerald-500 text-white"
-                        : "text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    <BarChart2 className="w-3.5 h-3.5" />
-                    Qrafik
-                  </button>
+                ))}
+              </div>
+              
+              {/* Powered by badge */}
+              <div className="flex items-center justify-center gap-3 mt-6 text-xs text-slate-500">
+                <span>Gücləndirən:</span>
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded-md">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span>3 API</span>
                 </div>
-                <p className="text-xs text-slate-400">
-                  <Sparkles className="w-3 h-3 inline mr-1" />
-                  DeepSeek AI
-                </p>
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded-md">
+                  <Globe className="w-3 h-3" />
+                  <span>50+ ölkə</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded-md">
+                  <TrendingUp className="w-3 h-3" />
+                  <span>Real-time</span>
+                </div>
               </div>
 
-              {/* AI Search Result */}
+              {/* AI Search Result - Premium Design */}
               {(streamingAnswer || searchError || isSearching || chartData) && (
-                <div className="mt-6 text-left">
-                  <Card className="bg-white/10 backdrop-blur-sm border-white/20">
-                    <CardContent className="p-6">
-                      {isSearching && (
-                        <div className="flex items-center gap-3 text-slate-300">
-                          <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
-                          <span>DeepSeek R1 düşünür...</span>
+                <div className="mt-8 text-left">
+                  <div className="relative">
+                    {/* Glow effect for result card */}
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 rounded-2xl blur opacity-75" />
+                    
+                    <div className="relative bg-slate-900/90 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden">
+                      {/* Header */}
+                      <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-gradient-to-r from-emerald-500/5 to-transparent">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                            <Sparkles className="w-4 h-4 text-white" />
+                          </div>
+                          <div>
+                            <span className="font-semibold text-white">Agrai</span>
+                            <span className="text-slate-500 text-sm ml-2">
+                              {isSearching ? "analiz edir..." : responseMode === "chart" ? "qrafik nəticə" : "cavab"}
+                            </span>
+                          </div>
                         </div>
-                      )}
+                        {!isSearching && (streamingAnswer || chartData) && (
+                          <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 rounded-full">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-xs text-emerald-400">Hazır</span>
+                          </div>
+                        )}
+                      </div>
                       
-                      {searchError && (
-                        <div className="text-red-400">
-                          <p className="font-medium">Xəta baş verdi</p>
-                          <p className="text-sm mt-1">{searchError}</p>
-                        </div>
-                      )}
-                      
-                      {/* Text Response */}
-                      {streamingAnswer && (
-                        <div className="space-y-4">
-                          <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                              <MessageSquare className="w-4 h-4 text-emerald-400" />
+                      <div className="p-6">
+                        {/* Loading State */}
+                        {isSearching && !streamingAnswer && !chartData && (
+                          <div className="flex items-center gap-4 py-4">
+                            <div className="relative">
+                              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center">
+                                <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+                              </div>
+                              <div className="absolute inset-0 rounded-xl bg-emerald-500/20 animate-ping" style={{ animationDuration: "1.5s" }} />
                             </div>
                             <div className="flex-1">
-                              <div 
-                                className="text-white whitespace-pre-wrap leading-relaxed ai-response"
-                                dangerouslySetInnerHTML={{ 
-                                  __html: streamingAnswer
-                                    .replace(/\*\*([^*]+)\*\*/g, '<span class="font-bold text-emerald-400">$1</span>')
-                                    .replace(/\*([^*]+)\*/g, '<em class="text-slate-300">$1</em>')
-                                }}
-                              />
-                              {isSearching && <span className="inline-block w-2 h-4 ml-1 bg-emerald-400 animate-pulse" />}
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-white font-medium">Agrai düşünür</span>
+                                <span className="text-slate-500 text-sm">•</span>
+                                <span className="text-slate-500 text-sm">Məlumatlar analiz edilir</span>
+                              </div>
+                              <div className="flex gap-1">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+                                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                                <div className="w-2 h-2 rounded-full bg-teal-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+                              </div>
                             </div>
                           </div>
+                        )}
+                      
+                      {/* Error State */}
+                      {searchError && (
+                        <div className="flex items-start gap-4 p-4 bg-red-500/10 rounded-xl border border-red-500/20">
+                          <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                            <X className="w-5 h-5 text-red-400" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-red-400">Xəta baş verdi</p>
+                            <p className="text-sm text-red-300/70 mt-1">{searchError}</p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Text Response - Premium */}
+                      {streamingAnswer && (
+                        <div className="space-y-4">
+                          <div 
+                            className="text-slate-200 text-[15px] leading-relaxed whitespace-pre-wrap"
+                            dangerouslySetInnerHTML={{ 
+                              __html: streamingAnswer
+                                .replace(/\*\*([^*]+)\*\*/g, '<span class="font-semibold text-emerald-400">$1</span>')
+                                .replace(/\*([^*]+)\*/g, '<em class="text-slate-400">$1</em>')
+                                .replace(/\n/g, '<br />')
+                            }}
+                          />
+                          {isSearching && (
+                            <span className="inline-block w-2 h-5 bg-gradient-to-t from-emerald-500 to-teal-400 rounded-sm animate-pulse ml-1" />
+                          )}
+                          
+                          {/* Source attribution */}
+                          {!isSearching && (
+                            <div className="flex items-center gap-4 pt-4 mt-4 border-t border-white/5">
+                              <span className="text-xs text-slate-500">Mənbələr:</span>
+                              <div className="flex items-center gap-2">
+                                <a href="https://agro.gov.az" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 rounded text-xs text-emerald-400 transition-colors">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                  Agro.gov.az
+                                </a>
+                                <a href="https://ec.europa.eu/eurostat" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 rounded text-xs text-blue-400 transition-colors">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                  EUROSTAT
+                                </a>
+                                <a href="https://www.fao.org/faostat" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 rounded text-xs text-amber-400 transition-colors">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                  FAOSTAT
+                                </a>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -482,21 +642,26 @@ export function MarketBriefClient({
                           </p>
                         </div>
                       )}
-                    </CardContent>
-                  </Card>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Trending searches */}
-            <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
-              <span className="text-sm text-slate-400">Populyar:</span>
-              {trendingProducts.slice(0, 5).map((product) => (
+            {/* Trending products as floating pills */}
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-10">
+              <span className="text-xs text-slate-500 uppercase tracking-wider mr-2">Trend:</span>
+              {trendingProducts.slice(0, 6).map((product, i) => (
                 <Link
                   key={product.id}
                   href={`/products/${product.slug}`}
-                  className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded-full text-sm text-white transition-colors"
+                  className="group px-4 py-2 bg-white/5 hover:bg-gradient-to-r hover:from-emerald-500/20 hover:to-teal-500/20 border border-white/10 hover:border-emerald-500/30 rounded-full text-sm text-slate-300 hover:text-white transition-all duration-300"
+                  style={{ animationDelay: `${i * 100}ms` }}
                 >
+                  <span className="mr-1.5 opacity-50 group-hover:opacity-100 transition-opacity">
+                    {i === 0 ? "🔥" : i === 1 ? "📈" : "🌿"}
+                  </span>
                   {product.nameAz || product.nameEn}
                 </Link>
               ))}
