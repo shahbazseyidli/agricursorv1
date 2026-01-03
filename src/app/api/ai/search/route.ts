@@ -69,15 +69,84 @@ function extractKeywords(query: string): string[] {
   return keywords;
 }
 
-// Fetch relevant data context based on query
+// Fetch data for a single product - PARALLEL queries
+async function getProductData(product: { id: string; slug: string; nameAz: string | null; nameEn: string }): Promise<string> {
+  // Run all queries in parallel for speed
+  const [azPrices, azAggregates, euPrices, faoPrices] = await Promise.all([
+    // AZ market prices
+    prisma.price.findMany({
+      where: { product: { globalProductId: product.id } },
+      orderBy: { date: "desc" },
+      take: 10,
+      include: {
+        market: { include: { marketType: true } },
+        product: true,
+      },
+    }),
+    // AZ aggregates
+    prisma.globalAzAggregate.findMany({
+      where: { globalProductId: product.id },
+      orderBy: [{ year: "desc" }, { period: "desc" }],
+      take: 12,
+    }),
+    // EU prices
+    prisma.euPrice.findMany({
+      where: { product: { globalProductId: product.id } },
+      orderBy: [{ year: "desc" }, { period: "desc" }],
+      take: 10,
+      include: { country: true },
+    }),
+    // FAO prices
+    prisma.faoPrice.findMany({
+      where: { product: { globalProductId: product.id } },
+      orderBy: { year: "desc" },
+      take: 10,
+      include: { country: true },
+    }),
+  ]);
+
+  let context = "";
+  const productName = product.nameAz || product.nameEn;
+
+  if (azPrices.length > 0) {
+    context += `\n📊 ${productName} - Azerbaijan Market Prices (latest 10):\n`;
+    for (const price of azPrices) {
+      context += `  - ${price.market.name} (${price.market.marketType?.nameAz || "Other"}): ${price.priceAvg.toFixed(2)} AZN/kg (${price.date.toISOString().split("T")[0]})\n`;
+    }
+  }
+
+  if (azAggregates.length > 0) {
+    context += `\n📈 ${productName} - AZ Average Prices:\n`;
+    for (const agg of azAggregates) {
+      context += `  - ${agg.year}/${agg.period} (${agg.marketTypeCode}): ${agg.avgPrice.toFixed(2)} AZN/kg\n`;
+    }
+  }
+
+  if (euPrices.length > 0) {
+    context += `\n🇪🇺 ${productName} - European Prices:\n`;
+    for (const price of euPrices) {
+      context += `  - ${price.country.nameEn}: ${price.price.toFixed(2)} EUR/100kg (${price.year}/${price.period || ""})\n`;
+    }
+  }
+
+  if (faoPrices.length > 0) {
+    context += `\n🌍 ${productName} - Global Producer Prices (FAO):\n`;
+    for (const price of faoPrices) {
+      context += `  - ${price.country.nameEn}: ${price.price.toFixed(0)} USD/ton (${price.year})\n`;
+    }
+  }
+
+  return context;
+}
+
+// Fetch relevant data context based on query - OPTIMIZED with parallel queries
 async function getDataContext(
   query: string,
   productSlug?: string
 ): Promise<string> {
   const keywords = extractKeywords(query);
-  let context = "";
 
-  // If specific product is mentioned or provided
+  // Find target products
   let targetProducts: { id: string; slug: string; nameAz: string | null; nameEn: string }[] = [];
 
   if (productSlug) {
@@ -101,116 +170,44 @@ async function getDataContext(
     });
   }
 
-  // Fetch AZ market data
+  // Fetch data for all products in PARALLEL
   if (targetProducts.length > 0) {
-    for (const product of targetProducts) {
-      // Get latest AZ prices
-      const azPrices = await prisma.price.findMany({
-        where: {
-          product: { globalProductId: product.id },
-        },
-        orderBy: { date: "desc" },
-        take: 10,
-        include: {
-          market: { include: { marketType: true } },
-          product: true,
-        },
-      });
-
-      if (azPrices.length > 0) {
-        context += `\n📊 ${product.nameAz || product.nameEn} - Azərbaycan Bazar Qiymətləri (son 10):\n`;
-        for (const price of azPrices) {
-          context += `  - ${price.market.name} (${price.market.marketType?.nameAz || "Digər"}): ${price.priceAvg.toFixed(2)} AZN/kg (${price.date.toISOString().split("T")[0]})\n`;
-        }
-      }
-
-      // Get AZ aggregates
-      const azAggregates = await prisma.globalAzAggregate.findMany({
-        where: { globalProductId: product.id },
-        orderBy: [{ year: "desc" }, { period: "desc" }],
-        take: 12,
-      });
-
-      if (azAggregates.length > 0) {
-        context += `\n📈 ${product.nameAz || product.nameEn} - AZ Orta Qiymətlər:\n`;
-        for (const agg of azAggregates) {
-          context += `  - ${agg.year}/${agg.period} (${agg.marketTypeCode}): ${agg.avgPrice.toFixed(2)} AZN/kg\n`;
-        }
-      }
-
-      // Get EU prices
-      const euPrices = await prisma.euPrice.findMany({
-        where: {
-          product: { globalProductId: product.id },
-        },
-        orderBy: [{ year: "desc" }, { period: "desc" }],
-        take: 10,
-        include: {
-          country: true,
-        },
-      });
-
-      if (euPrices.length > 0) {
-        context += `\n🇪🇺 ${product.nameAz || product.nameEn} - Avropa Qiymətləri:\n`;
-        for (const price of euPrices) {
-          context += `  - ${price.country.nameAz || price.country.nameEn}: ${price.price.toFixed(2)} EUR/100kg (${price.year}/${price.period || ""})\n`;
-        }
-      }
-
-      // Get FAO prices
-      const faoPrices = await prisma.faoPrice.findMany({
-        where: {
-          product: { globalProductId: product.id },
-        },
-        orderBy: { year: "desc" },
-        take: 10,
-        include: {
-          country: true,
-        },
-      });
-
-      if (faoPrices.length > 0) {
-        context += `\n🌍 ${product.nameAz || product.nameEn} - Qlobal İstehsalçı Qiymətləri (FAO):\n`;
-        for (const price of faoPrices) {
-          context += `  - ${price.country.nameAz || price.country.nameEn}: ${price.price.toFixed(0)} USD/ton (${price.year})\n`;
-        }
-      }
-    }
+    const productDataPromises = targetProducts.map(getProductData);
+    const productDataResults = await Promise.all(productDataPromises);
+    return productDataResults.join("");
   }
 
-  // If no specific product, get general stats
-  if (!context) {
-    const productCount = await prisma.globalProduct.count();
-    const marketCount = await prisma.market.count();
-    const priceCount = await prisma.price.count();
-    const euCountryCount = await prisma.euCountry.count();
-    const faoCountryCount = await prisma.faoCountry.count();
-
-    context = `📊 Ümumi Statistika:
-- ${productCount} məhsul
-- ${marketCount} Azərbaycan bazarı
-- ${priceCount}+ qiymət qeydi
-- ${euCountryCount} Avropa İttifaqı ölkəsi
-- ${faoCountryCount} FAO ölkəsi
-
-Data mənbələri: agro.gov.az, Eurostat, FAOSTAT`;
-
-    // Get some recent price updates
-    const recentPrices = await prisma.price.findMany({
+  // If no specific product, get general stats - all in PARALLEL
+  const [productCount, marketCount, priceCount, euCountryCount, faoCountryCount, recentPrices] = await Promise.all([
+    prisma.globalProduct.count(),
+    prisma.market.count(),
+    prisma.price.count(),
+    prisma.euCountry.count(),
+    prisma.faoCountry.count(),
+    prisma.price.findMany({
       orderBy: { date: "desc" },
       take: 5,
       include: {
         product: { include: { globalProduct: true } },
         market: true,
       },
-    });
+    }),
+  ]);
 
-    if (recentPrices.length > 0) {
-      context += `\n\n📰 Son Qiymət Yeniləmələri:\n`;
-      for (const price of recentPrices) {
-        const name = price.product.globalProduct?.nameAz || price.product.name;
-        context += `  - ${name}: ${price.priceAvg.toFixed(2)} AZN/kg (${price.market.name})\n`;
-      }
+  let context = `📊 General Statistics:
+- ${productCount} products
+- ${marketCount} Azerbaijan markets
+- ${priceCount}+ price records
+- ${euCountryCount} European Union countries
+- ${faoCountryCount} FAO countries
+
+Data sources: agro.gov.az, Eurostat, FAOSTAT`;
+
+  if (recentPrices.length > 0) {
+    context += `\n\n📰 Latest Price Updates:\n`;
+    for (const price of recentPrices) {
+      const name = price.product.globalProduct?.nameAz || price.product.name;
+      context += `  - ${name}: ${price.priceAvg.toFixed(2)} AZN/kg (${price.market.name})\n`;
     }
   }
 

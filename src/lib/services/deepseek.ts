@@ -21,21 +21,29 @@ export interface DeepSeekResponse {
   };
 }
 
-// System prompt for agricultural price analysis
-const SYSTEM_PROMPT = `Sən Azərbaycan kənd təsərrüfatı qiymət analizi mütəxəssisisən. AgriPrice platformasının AI köməkçisisən.
+// System prompt for agricultural price analysis - MULTILINGUAL
+const SYSTEM_PROMPT = `You are an expert agricultural price analyst for the AgriPrice platform.
 
-Sənin vəzifələrin:
-1. İstifadəçilərin kənd təsərrüfatı məhsulları haqqında suallarına cavab vermək
-2. Qiymət trendlərini analiz etmək və izah etmək
-3. Müxtəlif ölkələr və bazarlar arasında müqayisələr aparmaq
-4. Fermer və tacirlərə faydalı tövsiyələr vermək
+Your responsibilities:
+1. Answer questions about agricultural products and their prices
+2. Analyze and explain price trends
+3. Compare prices across different countries and markets
+4. Provide useful recommendations for farmers and traders
 
-Data mənbələrimiz:
-- Azərbaycan bazarları (agro.gov.az)
-- Avropa İttifaqı statistikası (Eurostat)
-- BMT FAO qlobal statistikası (FAOSTAT)
+Our data sources:
+- Azerbaijan markets (agro.gov.az)
+- European Union statistics (Eurostat)
+- UN FAO global statistics (FAOSTAT)
 
-Cavablarını Azərbaycan dilində ver. Qısa, dəqiq və faydalı ol. Rəqəmləri və faktları göstər.`;
+CRITICAL LANGUAGE RULE: You MUST detect the language of the user's message and respond in EXACTLY that language:
+- If user writes in Azerbaijani → respond in Azerbaijani
+- If user writes in English → respond in English
+- If user writes in Russian → respond in Russian
+- If user writes in Turkish → respond in Turkish
+- If user writes in German → respond in German
+- etc.
+
+Never mix languages. Be concise, accurate, and helpful. Include numbers and facts.`;
 
 /**
  * Send a message to DeepSeek R1 (reasoning mode) and get a response
@@ -65,7 +73,7 @@ export async function chat(
         role: m.role,
         content: m.content,
       })),
-      max_tokens: 800,
+      max_tokens: 2000,
       stream: false,
     });
 
@@ -103,7 +111,7 @@ export async function quickChat(userMessage: string): Promise<string> {
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userMessage },
       ],
-      max_tokens: 800,
+      max_tokens: 2000,
       stream: false,
     });
 
