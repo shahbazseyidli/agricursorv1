@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import * as XLSX from "xlsx";
+import { recalculateAggregatesForAffectedProducts } from "@/lib/services/aggregate-calculator";
 
 export async function POST(req: Request) {
   try {
@@ -271,17 +272,40 @@ export async function POST(req: Request) {
       },
     });
 
+    // Recalculate aggregates for affected products
+    let aggregatesUpdated = 0;
+    try {
+      // Get unique product IDs from uploaded data
+      const affectedProductIds = await prisma.price.findMany({
+        where: {
+          countryId: country.id,
+          createdAt: { gte: new Date(Date.now() - 60000) }, // Last minute
+        },
+        select: { productId: true },
+        distinct: ["productId"],
+      });
+      
+      const productIds = affectedProductIds.map(p => p.productId);
+      if (productIds.length > 0) {
+        aggregatesUpdated = await recalculateAggregatesForAffectedProducts(productIds);
+      }
+    } catch (aggError) {
+      console.error("Aggregate calculation error:", aggError);
+    }
+
     return NextResponse.json({
       success: true,
-      message: `Yükləmə tamamlandı: ${recordsNew} yeni, ${recordsUpdated} yeniləndi`,
+      message: `Yükləmə tamamlandı: ${recordsNew} yeni, ${recordsUpdated} yeniləndi, ${aggregatesUpdated} aggregate yeniləndi`,
       recordsTotal: data.length,
       recordsNew,
       recordsUpdated,
+      aggregatesUpdated,
       data: {
         inserted: recordsNew,
         updated: recordsUpdated,
         skipped: 0,
         errors: errors.length,
+        aggregates: aggregatesUpdated,
       },
       errors: errors.length > 0 ? errors : undefined,
     });

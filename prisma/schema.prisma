@@ -320,7 +320,8 @@ model GlobalProduct {
   nameAz       String?  @map("name_az") // Alma
   nameRu       String?  @map("name_ru") // Яблоко
   category     String?  // Fruits, Vegetables
-  faoCode      String?  @map("fao_code") // FAO commodity code
+  faoCode      String?  @map("fao_code") // FAO Item Code (e.g., "515")
+  cpcCode      String?  @map("cpc_code") // CPC classification code (e.g., "01341")
   hsCode       String?  @map("hs_code") // HS trade code
   eurostatCode String?  @map("eurostat_code") // Eurostat code
   defaultUnit  String   @default("kg") @map("default_unit")
@@ -340,9 +341,11 @@ model GlobalProduct {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  // Links to local & EU products
-  localProducts Product[]
-  euProducts    EuProduct[]
+  // Links to local & EU & FAO products
+  localProducts  Product[]
+  euProducts     EuProduct[]
+  faoProducts    FaoProduct[]
+  azAggregates   GlobalAzAggregate[]
 
   @@index([category])
   @@map("global_products")
@@ -514,4 +517,133 @@ model EuDataSync {
   @@index([status])
   @@index([createdAt])
   @@map("eu_data_syncs")
+}
+
+// ============================================
+// FAO DATA - FAOSTAT Global Producer Prices
+// ============================================
+
+// FAO Countries (245+ countries)
+model FaoCountry {
+  id        String   @id @default(cuid())
+  code      String   @unique // Area Code from FAO (e.g., "52" for Azerbaijan)
+  m49Code   String?  @map("m49_code") // UN M49 code
+  nameEn    String   @map("name_en")
+  nameAz    String?  @map("name_az")
+  region    String?  // Region grouping
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  prices FaoPrice[]
+
+  @@map("fao_countries")
+}
+
+// FAO Products (Items from FAOSTAT)
+model FaoProduct {
+  id              String   @id @default(cuid())
+  itemCode        String   @unique @map("item_code") // FAO Item Code (e.g., "515" for Apples)
+  cpcCode         String?  @map("cpc_code") // CPC classification code
+  nameEn          String   @map("name_en") // "Apples"
+  nameAz          String?  @map("name_az")
+  category        String?  // Fruits, Vegetables, Cereals...
+  
+  // Link to Global Product
+  globalProductId String?  @map("global_product_id")
+  globalProduct   GlobalProduct? @relation(fields: [globalProductId], references: [id], onDelete: SetNull)
+  
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  prices FaoPrice[]
+
+  @@index([globalProductId])
+  @@index([category])
+  @@map("fao_products")
+}
+
+// FAO Prices - Global Producer Prices
+model FaoPrice {
+  id           String   @id @default(cuid())
+  countryId    String   @map("country_id")
+  productId    String   @map("product_id")
+  
+  // Price data
+  price        Float    // Price value
+  currency     String   // LCU, SLC, USD
+  unit         String   @default("tonne") // Always per tonne from FAO
+  
+  // Element type (price type)
+  elementCode  String   @map("element_code") // 5530=LCU, 5531=SLC, 5532=USD
+  elementName  String   @map("element_name") // "Producer Price (USD/tonne)"
+  
+  // Time period (annual only from FAO)
+  year         Int
+  periodType   String   @default("ANNUAL") @map("period_type")
+  
+  // Data quality flag
+  flag         String?  // A=Aggregate, E=Estimate, F=FAO estimate, etc.
+  
+  // Source tracking
+  source       String   @default("FAOSTAT")
+  sourceUrl    String?  @map("source_url")
+  
+  fetchedAt    DateTime @default(now()) @map("fetched_at")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  country FaoCountry @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  product FaoProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([countryId, productId, year, elementCode])
+  @@index([countryId])
+  @@index([productId])
+  @@index([year])
+  @@index([elementCode])
+  @@map("fao_prices")
+}
+
+// ============================================
+// GLOBAL AGGREGATE PRICES - For cross-country comparison
+// ============================================
+
+// Aggregated AZ prices by GlobalProduct (not local Product)
+model GlobalAzAggregate {
+  id              String   @id @default(cuid())
+  globalProductId String   @map("global_product_id")
+  marketTypeCode  String   @map("market_type_code") // RETAIL, WHOLESALE, FARMGATE, PROCESSING
+  
+  // Aggregated values (all varieties, all markets)
+  avgPrice        Float    @map("avg_price")
+  minPrice        Float    @map("min_price")
+  maxPrice        Float    @map("max_price")
+  sampleCount     Int      @map("sample_count") // Number of price points included
+  
+  // Original currency/unit
+  currency        String   @default("AZN")
+  unit            String   @default("kg")
+  
+  // Time period
+  periodType      String   @map("period_type") // WEEKLY, MONTHLY, ANNUAL
+  period          Int?     // 1-53 for weeks, 1-12 for months, null for annual
+  year            Int
+  startDate       DateTime? @map("start_date")
+  endDate         DateTime? @map("end_date")
+  
+  // Source tracking
+  source          String   @default("agro.gov.az")
+  
+  calculatedAt    DateTime @default(now()) @map("calculated_at")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  globalProduct GlobalProduct @relation(fields: [globalProductId], references: [id], onDelete: Cascade)
+
+  @@unique([globalProductId, marketTypeCode, year, period, periodType])
+  @@index([globalProductId])
+  @@index([marketTypeCode])
+  @@index([year, period])
+  @@map("global_az_aggregates")
 }

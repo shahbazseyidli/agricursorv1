@@ -45,3 +45,7 @@ next-env.d.ts
 
 # testsprite
 /testsprite_tests/
+
+# FAO bulk data (too large for git)
+/data/fao/*.csv
+/data/fao/*.zip
