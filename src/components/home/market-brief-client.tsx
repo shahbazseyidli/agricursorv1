@@ -7,16 +7,16 @@ import {
   ArrowRight, 
   TrendingUp, 
   BarChart3, 
-  MapPin, 
-  Package,
   Globe,
   Leaf,
   ChevronRight,
   Sparkles,
-  Database,
   ExternalLink,
   Calendar,
-  DollarSign,
+  Loader2,
+  X,
+  Brain,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -110,6 +110,56 @@ export function MarketBriefClient({
   countriesWithData,
 }: MarketBriefClientProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResult, setSearchResult] = useState<{
+    answer: string;
+    reasoning?: string;
+  } | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    
+    setIsSearching(true);
+    setSearchError(null);
+    setSearchResult(null);
+
+    try {
+      const response = await fetch("/api/ai/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: searchQuery }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Xəta baş verdi");
+      }
+
+      setSearchResult({
+        answer: data.answer,
+        reasoning: data.reasoning,
+      });
+    } catch (error) {
+      setSearchError(error instanceof Error ? error.message : "Bilinməyən xəta");
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !isSearching && searchQuery.trim()) {
+      e.preventDefault();
+      handleSearch();
+    }
+  };
+
+  const clearSearch = () => {
+    setSearchQuery("");
+    setSearchResult(null);
+    setSearchError(null);
+  };
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -179,28 +229,102 @@ export function MarketBriefClient({
             <div className="max-w-3xl mx-auto">
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Sparkles className="h-5 w-5 text-emerald-400" />
+                  {isSearching ? (
+                    <Loader2 className="h-5 w-5 text-emerald-400 animate-spin" />
+                  ) : (
+                    <Brain className="h-5 w-5 text-emerald-400" />
+                  )}
                 </div>
                 <input
                   type="text"
-                  className="block w-full pl-12 pr-20 py-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-lg"
-                  placeholder="AI ilə axtarış: 'Alma qiymətləri bu il necə dəyişib?'"
+                  className="block w-full pl-12 pr-28 py-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-lg"
+                  placeholder="Soruşun: 'Alma qiymətləri bu il necə dəyişib?'"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={isSearching}
                 />
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center gap-1">
+                  {searchQuery && (
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      className="text-slate-400 hover:text-white rounded-xl h-8 w-8 p-0"
+                      onClick={clearSearch}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  )}
                   <Button 
                     size="sm" 
                     className="bg-emerald-500 hover:bg-emerald-600 rounded-xl"
+                    onClick={handleSearch}
+                    disabled={isSearching || !searchQuery.trim()}
                   >
-                    <Search className="w-4 h-4 mr-1" />
-                    Axtar
+                    {isSearching ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Search className="w-4 h-4 mr-1" />
+                        Axtar
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>
               <p className="text-xs text-slate-400 mt-2">
-                🚀 DeepSeek AI ilə gücləndirilmiş axtarış (tezliklə)
+                <Sparkles className="w-3 h-3 inline mr-1" />
+                DeepSeek R1 AI ilə gücləndirilmiş analiz
               </p>
+
+              {/* AI Search Result */}
+              {(searchResult || searchError || isSearching) && (
+                <div className="mt-6 text-left">
+                  <Card className="bg-white/10 backdrop-blur-sm border-white/20">
+                    <CardContent className="p-6">
+                      {isSearching && (
+                        <div className="flex items-center gap-3 text-slate-300">
+                          <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+                          <span>DeepSeek R1 düşünür...</span>
+                        </div>
+                      )}
+                      
+                      {searchError && (
+                        <div className="text-red-400">
+                          <p className="font-medium">Xəta baş verdi</p>
+                          <p className="text-sm mt-1">{searchError}</p>
+                        </div>
+                      )}
+                      
+                      {searchResult && (
+                        <div className="space-y-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                              <MessageSquare className="w-4 h-4 text-emerald-400" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-white whitespace-pre-wrap leading-relaxed">
+                                {searchResult.answer}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          {searchResult.reasoning && (
+                            <details className="mt-4">
+                              <summary className="text-sm text-slate-400 cursor-pointer hover:text-slate-300">
+                                💭 AI düşüncə prosesi
+                              </summary>
+                              <div className="mt-2 p-3 bg-slate-800/50 rounded-lg text-sm text-slate-400 whitespace-pre-wrap">
+                                {searchResult.reasoning}
+                              </div>
+                            </details>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </div>
 
             {/* Trending searches */}
@@ -318,7 +442,7 @@ export function MarketBriefClient({
                       </div>
                       <div className="text-xs text-slate-400 flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
-                        {new Date(price.date).toLocaleDateString('az-AZ')}
+                        {price.date.split('T')[0].split('-').reverse().join('.')}
                       </div>
                     </div>
                   </CardContent>
