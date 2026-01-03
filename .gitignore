@@ -49,3 +49,4 @@ next-env.d.ts
 # FAO bulk data (too large for git)
 /data/fao/*.csv
 /data/fao/*.zip
+prisma/dev.db
