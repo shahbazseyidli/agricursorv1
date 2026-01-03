@@ -66,6 +66,7 @@ interface GlobalProduct {
   _count: {
     localProducts: number;
     euProducts: number;
+    faoProducts: number;
   };
 }
 
@@ -536,7 +537,7 @@ export default function GlobalProductsPage() {
                     <Badge variant="secondary">{product.category || "Digər"}</Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="flex gap-1">
+                    <div className="flex gap-1 flex-wrap">
                       {product._count.localProducts > 0 && (
                         <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
                           🇦🇿 {product._count.localProducts}
@@ -545,6 +546,11 @@ export default function GlobalProductsPage() {
                       {product._count.euProducts > 0 && (
                         <Badge variant="outline" className="bg-blue-50 text-blue-700">
                           🇪🇺 {product._count.euProducts}
+                        </Badge>
+                      )}
+                      {product._count.faoProducts > 0 && (
+                        <Badge variant="outline" className="bg-amber-50 text-amber-700">
+                          🌍 FAO {product._count.faoProducts}
                         </Badge>
                       )}
                     </div>

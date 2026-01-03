@@ -21,6 +21,7 @@ export async function GET() {
           select: {
             localProducts: true,
             euProducts: true,
+            faoProducts: true,
           },
         },
       },
@@ -79,5 +80,6 @@ export async function POST(req: Request) {
     );
   }
 }
+
 
 

@@ -528,6 +528,7 @@ model FaoCountry {
   id        String   @id @default(cuid())
   code      String   @unique // Area Code from FAO (e.g., "52" for Azerbaijan)
   m49Code   String?  @map("m49_code") // UN M49 code
+  iso2      String?  // ISO 3166-1 alpha-2 code (e.g., "AZ")
   nameEn    String   @map("name_en")
   nameAz    String?  @map("name_az")
   region    String?  // Region grouping
@@ -537,6 +538,7 @@ model FaoCountry {
 
   prices FaoPrice[]
 
+  @@index([iso2])
   @@map("fao_countries")
 }
 

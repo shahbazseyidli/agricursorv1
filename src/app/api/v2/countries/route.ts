@@ -52,26 +52,35 @@ const FLAGS: Record<string, string> = {
   "BF": "🇧🇫",
 };
 
-// FAO code to ISO2 mapping
+// FAO code to ISO2 mapping (complete)
 const FAO_TO_ISO: Record<string, string> = {
-  "52": "AZ",
   "11": "AT",
+  "52": "AZ",
   "255": "BE",
+  "27": "BG",
+  "80": "BA",
   "167": "CZ",
   "67": "FI",
   "68": "FR",
+  "73": "GE",
   "79": "DE",
-  "99": "IS",
+  "84": "GR",
+  "97": "IS",
+  "99": "HU",
   "100": "IN",
+  "102": "IR",
   "106": "IT",
   "256": "LU",
+  "150": "NL",
   "162": "NO",
+  "173": "PL",
   "174": "PT",
+  "183": "RO",
   "185": "RU",
   "203": "ES",
+  "223": "TR",
+  "230": "UA",
   "229": "GB",
-  "80": "BA",
-  "233": "BF",
 };
 
 // ISO2 to FAO code mapping (reverse)

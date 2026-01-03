@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { formatPrice, formatDate, formatShortDate } from "@/lib/utils";
 import { EuComparison } from "@/components/products/eu-comparison";
+import { MultiSourceComparison } from "@/components/products/multi-source-comparison";
 
 interface Currency {
   code: string;
@@ -1112,18 +1113,13 @@ export function ProductPageClient({
             </CardContent>
           </Card>
 
-          {/* Ölkə Müqayisəsi - Qrafikin yanında */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              {/* EU Comparison Chart Component */}
-              <EuComparison
-                productId={product.id}
-                productName={product.name}
-                marketTypeCode={selectedMarketType || "RETAIL"}
-                className="h-full"
-              />
-            </div>
-          </div>
+          {/* Çox Mənbəli Müqayisə (v2 API) */}
+          <MultiSourceComparison
+            productSlug={product.slug}
+            productName={product.name}
+            targetCurrency={selectedCurrency}
+            targetUnit={selectedUnit}
+          />
 
           {/* Bazar Qiymətləri - 2 Kart: Ən ucuz 5 və Ən baha 5 */}
           {isGuest ? (

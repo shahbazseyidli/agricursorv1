@@ -9,21 +9,24 @@
  * - product: product slug (required)
  * - selections: JSON array of {countryCode, dataSource} (required)
  * - periodType: WEEKLY | MONTHLY | ANNUAL (default: ANNUAL)
+ * - marketType: FARMGATE | RETAIL | WHOLESALE | PROCESSING (default: FARMGATE)
  * - yearFrom: start year (default: 2015)
  * - yearTo: end year (default: 2025)
  * 
- * Example: ?product=apple&selections=[{"countryCode":"AZ","dataSource":"AGRO_AZ"},{"countryCode":"DE","dataSource":"FAOSTAT"}]
+ * Example: ?product=apple&selections=[{"countryCode":"AZ","dataSource":"AGRO_AZ"},{"countryCode":"DE","dataSource":"FAOSTAT"}]&marketType=RETAIL
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// FAO code to ISO2 mapping
+// FAO code to ISO2 mapping (complete)
 const FAO_TO_ISO: Record<string, string> = {
-  "52": "AZ", "11": "AT", "255": "BE", "167": "CZ", "67": "FI",
-  "68": "FR", "79": "DE", "99": "IS", "100": "IN", "106": "IT",
-  "256": "LU", "162": "NO", "174": "PT", "185": "RU", "203": "ES",
-  "229": "GB", "80": "BA", "233": "BF",
+  "11": "AT", "52": "AZ", "255": "BE", "27": "BG", "80": "BA",
+  "167": "CZ", "67": "FI", "68": "FR", "73": "GE", "79": "DE",
+  "84": "GR", "97": "IS", "99": "HU", "100": "IN", "102": "IR",
+  "106": "IT", "256": "LU", "150": "NL", "162": "NO", "173": "PL",
+  "174": "PT", "183": "RO", "185": "RU", "203": "ES", "223": "TR",
+  "230": "UA", "229": "GB",
 };
 
 const ISO_TO_FAO: Record<string, string> = Object.fromEntries(
@@ -62,6 +65,7 @@ export async function GET(request: NextRequest) {
     const productSlug = searchParams.get("product");
     const selectionsParam = searchParams.get("selections");
     const periodType = searchParams.get("periodType") || "ANNUAL";
+    const marketType = searchParams.get("marketType") || "FARMGATE"; // FARMGATE | RETAIL | WHOLESALE | PROCESSING
     const yearFrom = parseInt(searchParams.get("yearFrom") || "2015");
     const yearTo = parseInt(searchParams.get("yearTo") || "2025");
     
@@ -112,6 +116,7 @@ export async function GET(request: NextRequest) {
         sel,
         globalProduct,
         periodType,
+        marketType,
         yearFrom,
         yearTo
       );
@@ -160,6 +165,7 @@ export async function GET(request: NextRequest) {
           category: globalProduct.category,
         },
         yearRange: { from: yearFrom, to: yearTo },
+        marketType,
         series,
       },
       conversionRates,
@@ -174,6 +180,14 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Market type display names
+const MARKET_TYPE_NAMES: Record<string, { az: string; en: string }> = {
+  "FARMGATE": { az: "Sahə qiyməti", en: "Farmgate" },
+  "RETAIL": { az: "Pərakəndə", en: "Retail" },
+  "WHOLESALE": { az: "Topdan", en: "Wholesale" },
+  "PROCESSING": { az: "Emal", en: "Processing" },
+};
+
 async function getSeriesData(
   selection: Selection,
   globalProduct: {
@@ -182,17 +196,18 @@ async function getSeriesData(
     faoProducts: { id: string; itemCode: string; nameEn: string }[];
   },
   periodType: string,
+  marketType: string,
   yearFrom: number,
   yearTo: number
 ): Promise<Series | null> {
   const { countryCode, dataSource } = selection;
   
   if (dataSource === "AGRO_AZ") {
-    // Get AZ aggregate data
+    // Get AZ aggregate data with selected market type
     const azData = await prisma.globalAzAggregate.findMany({
       where: {
         globalProductId: globalProduct.id,
-        marketTypeCode: "FARMGATE", // Use FARMGATE for FAO/EU comparison
+        marketTypeCode: marketType, // Use user-selected market type
         periodType: periodType,
         year: { gte: yearFrom, lte: yearTo },
       },
@@ -201,11 +216,13 @@ async function getSeriesData(
     
     if (azData.length === 0) return null;
     
+    const marketTypeName = MARKET_TYPE_NAMES[marketType]?.az || marketType;
+    
     return {
       countryCode: "AZ",
       countryName: "Azərbaycan",
       dataSource: "AGRO_AZ",
-      sourceName: "Agro.gov.az",
+      sourceName: `Agro.gov.az (${marketTypeName})`,
       currency: "AZN",
       unit: "kg",
       periodType,
