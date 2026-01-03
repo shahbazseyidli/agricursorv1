@@ -111,10 +111,7 @@ export function MarketBriefClient({
 }: MarketBriefClientProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  const [searchResult, setSearchResult] = useState<{
-    answer: string;
-    reasoning?: string;
-  } | null>(null);
+  const [streamingAnswer, setStreamingAnswer] = useState("");
   const [searchError, setSearchError] = useState<string | null>(null);
 
   const handleSearch = async () => {
@@ -122,25 +119,50 @@ export function MarketBriefClient({
     
     setIsSearching(true);
     setSearchError(null);
-    setSearchResult(null);
+    setStreamingAnswer("");
 
     try {
-      const response = await fetch("/api/ai/search", {
+      // Use streaming API for instant response
+      const response = await fetch("/api/ai/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: searchQuery }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || "Xəta baş verdi");
+        const error = await response.json();
+        throw new Error(error.error || "Xəta baş verdi");
       }
 
-      setSearchResult({
-        answer: data.answer,
-        reasoning: data.reasoning,
-      });
+      // Read streaming response
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error("Stream reader unavailable");
+      }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n").filter((line) => line.startsWith("data: "));
+
+        for (const line of lines) {
+          const data = line.replace("data: ", "").trim();
+          if (data === "[DONE]") continue;
+          
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.content) {
+              setStreamingAnswer((prev) => prev + parsed.content);
+            }
+          } catch {
+            // Skip invalid JSON
+          }
+        }
+      }
     } catch (error) {
       setSearchError(error instanceof Error ? error.message : "Bilinməyən xəta");
     } finally {
@@ -157,7 +179,7 @@ export function MarketBriefClient({
 
   const clearSearch = () => {
     setSearchQuery("");
-    setSearchResult(null);
+    setStreamingAnswer("");
     setSearchError(null);
   };
 
@@ -296,7 +318,7 @@ export function MarketBriefClient({
                         </div>
                       )}
                       
-                      {searchResult && (
+                      {streamingAnswer && (
                         <div className="space-y-4">
                           <div className="flex items-start gap-3">
                             <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
@@ -304,21 +326,11 @@ export function MarketBriefClient({
                             </div>
                             <div className="flex-1">
                               <p className="text-white whitespace-pre-wrap leading-relaxed">
-                                {searchResult.answer}
+                                {streamingAnswer}
+                                {isSearching && <span className="inline-block w-2 h-4 ml-1 bg-emerald-400 animate-pulse" />}
                               </p>
                             </div>
                           </div>
-                          
-                          {searchResult.reasoning && (
-                            <details className="mt-4">
-                              <summary className="text-sm text-slate-400 cursor-pointer hover:text-slate-300">
-                                💭 AI düşüncə prosesi
-                              </summary>
-                              <div className="mt-2 p-3 bg-slate-800/50 rounded-lg text-sm text-slate-400 whitespace-pre-wrap">
-                                {searchResult.reasoning}
-                              </div>
-                            </details>
-                          )}
                         </div>
                       )}
                     </CardContent>

@@ -215,6 +215,9 @@ Data sources: agro.gov.az, Eurostat, FAOSTAT`;
 }
 
 export async function POST(request: NextRequest) {
+  const timings: Record<string, number> = {};
+  const startTotal = Date.now();
+  
   try {
     const body: SearchRequest = await request.json();
     const { query, productSlug } = body;
@@ -233,18 +236,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get relevant data context
+    // Get relevant data context - MEASURE TIME
+    const dbStart = Date.now();
     const context = await getDataContext(query, productSlug);
+    timings.db_query_ms = Date.now() - dbStart;
 
-    // Call DeepSeek R1 API
+    // Call DeepSeek R1 API - MEASURE TIME
+    const aiStart = Date.now();
     const response = await chat(query, context);
+    timings.ai_api_ms = Date.now() - aiStart;
+    
+    timings.total_ms = Date.now() - startTotal;
 
     return NextResponse.json({
       success: true,
       answer: response.content,
       reasoning: response.reasoning,
       usage: response.usage,
-      context: context.substring(0, 500) + (context.length > 500 ? "..." : ""), // Truncate for response
+      context: context.substring(0, 500) + (context.length > 500 ? "..." : ""),
+      timings, // Include timing info for debugging
     });
   } catch (error) {
     console.error("AI Search error:", error);
@@ -255,6 +265,7 @@ export async function POST(request: NextRequest) {
       { 
         error: "AI xidmətində xəta baş verdi",
         details: errorMessage,
+        timings,
       },
       { status: 500 }
     );
