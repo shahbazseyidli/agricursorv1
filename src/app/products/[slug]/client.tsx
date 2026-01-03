@@ -77,6 +77,20 @@ interface ProductVariety {
   hsCode?: string | null;
 }
 
+interface PriceStage {
+  id: string;
+  code: string;
+  nameAz?: string | null;
+  nameEn: string;
+}
+
+interface FpmaMarket {
+  id: string;
+  name: string;
+  globalMarketId?: string | null;
+  countryIso3?: string;
+}
+
 interface ProductPageClientProps {
   product: any;
   markets: any[];
@@ -93,6 +107,10 @@ interface ProductPageClientProps {
   dataSources?: DataSource[];
   productVarieties?: ProductVariety[];
   productInfo?: ProductInfo | null;
+  availablePriceStages?: PriceStage[];
+  availableFpmaMarkets?: FpmaMarket[];
+  fpmaCountriesWithData?: { iso3: string; iso2?: string; name: string }[];
+  productImage?: string | null;
 }
 
 // Market type icons
@@ -127,6 +145,10 @@ export function ProductPageClient({
   dataSources = [],
   productVarieties = [],
   productInfo,
+  availablePriceStages = [],
+  availableFpmaMarkets = [],
+  fpmaCountriesWithData = [],
+  productImage,
 }: ProductPageClientProps) {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -137,7 +159,15 @@ export function ProductPageClient({
   const [selectedMarketType, setSelectedMarketType] = useState<string>("");
   const [selectedMarket, setSelectedMarket] = useState<string>("");
   const [selectedProductType, setSelectedProductType] = useState<string>("");
-  const [dateRange, setDateRange] = useState("6m");
+  const [dateRange, setDateRange] = useState("1y"); // Default 1 il
+  
+  // GlobalPriceStage filter (for FPMA/FAO data)
+  const [selectedPriceStage, setSelectedPriceStage] = useState<string>(
+    availablePriceStages.length > 0 ? availablePriceStages[0].code : ""
+  );
+  
+  // GlobalMarket filter (for FPMA data)
+  const [selectedFpmaMarket, setSelectedFpmaMarket] = useState<string>("");
   
   // Data source state - default to first available source
   const [selectedDataSource, setSelectedDataSource] = useState<string>(
@@ -280,6 +310,21 @@ export function ProductPageClient({
           params.append("country", currentCountry);
         }
 
+        // Add data source parameter
+        if (selectedDataSource) {
+          params.append("dataSource", selectedDataSource);
+        }
+
+        // Add price stage parameter for FPMA/FAO/EU
+        if (selectedPriceStage) {
+          params.append("priceStage", selectedPriceStage);
+        }
+
+        // Add FPMA market parameter
+        if (selectedFpmaMarket && selectedFpmaMarket !== "national_avg" && selectedFpmaMarket !== "national_avg_monthly" && selectedFpmaMarket !== "national_avg_weekly") {
+          params.append("fpmaMarket", selectedFpmaMarket);
+        }
+
         const res = await fetch(
           `/api/products/${product.slug}/prices?${params.toString()}`
         );
@@ -325,7 +370,7 @@ export function ProductPageClient({
     }
 
     fetchPrices();
-  }, [product.slug, selectedMarket, selectedMarketType, selectedProductType, dateRange, compareMarket, customStartYear, customStartMonth, customEndYear, customEndMonth, selectedCurrency, selectedUnit, isGuest, currentCountry]);
+  }, [product.slug, selectedMarket, selectedMarketType, selectedProductType, dateRange, compareMarket, customStartYear, customStartMonth, customEndYear, customEndMonth, selectedCurrency, selectedUnit, isGuest, currentCountry, selectedDataSource, selectedPriceStage, selectedFpmaMarket]);
 
   // Auto-select first market when market type changes
   useEffect(() => {
@@ -419,34 +464,8 @@ export function ProductPageClient({
     return "text-slate-500";
   };
 
-  // Ən ucuz və ən baha bazarları hesabla - FX conversion apply et
+  // FX rate for price conversion
   const fxRate = currencyInfo?.fxRate || 1;
-  
-  const cheapestMarkets = useMemo(() => {
-    if (!latestPrices || latestPrices.length === 0) return [];
-    return [...latestPrices]
-      .map(p => ({
-        ...p,
-        priceAvg: Number(p.priceAvg) * fxRate,
-        priceMin: Number(p.priceMin) * fxRate,
-        priceMax: Number(p.priceMax) * fxRate,
-      }))
-      .sort((a, b) => a.priceAvg - b.priceAvg)
-      .slice(0, 5);
-  }, [latestPrices, fxRate]);
-
-  const expensiveMarkets = useMemo(() => {
-    if (!latestPrices || latestPrices.length === 0) return [];
-    return [...latestPrices]
-      .map(p => ({
-        ...p,
-        priceAvg: Number(p.priceAvg) * fxRate,
-        priceMin: Number(p.priceMin) * fxRate,
-        priceMax: Number(p.priceMax) * fxRate,
-      }))
-      .sort((a, b) => b.priceAvg - a.priceAvg)
-      .slice(0, 5);
-  }, [latestPrices, fxRate]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -457,26 +476,20 @@ export function ProductPageClient({
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
-                  <Package className="w-6 h-6 text-emerald-600" />
-                </div>
+                {productImage ? (
+                  <img 
+                    src={productImage} 
+                    alt={product.name}
+                    className="w-12 h-12 rounded-xl object-cover"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
+                    <Package className="w-6 h-6 text-emerald-600" />
+                  </div>
+                )}
                 <div className="flex-1">
-                  {/* Product dropdown */}
-                  <Select 
-                    value={product.slug} 
-                    onValueChange={(slug) => router.push(`/products/${slug}`)}
-                  >
-                    <SelectTrigger className="h-auto w-auto border-0 p-0 text-xl font-bold text-slate-900 hover:bg-transparent focus:ring-0 shadow-none [&>svg]:h-4 [&>svg]:w-4 [&>svg]:text-slate-400">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {productsInCategory.map((p: any) => (
-                        <SelectItem key={p.slug} value={p.slug}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {/* Product name - static display */}
+                  <h1 className="text-xl font-bold text-slate-900">{product.name}</h1>
                   
                   {/* Category dropdown */}
                   <Select 
@@ -610,26 +623,7 @@ export function ProductPageClient({
             </CardContent>
           </Card>
 
-          {/* Related Products */}
-          {relatedProducts.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Əlaqəli məhsullar</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {relatedProducts.map((rp: any) => (
-                  <Link
-                    key={rp.id}
-                    href={`/products/${rp.slug}`}
-                    className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 transition-colors"
-                  >
-                    <span className="text-sm text-slate-700">{rp.name}</span>
-                    <ArrowUpRight className="w-4 h-4 text-slate-400" />
-                  </Link>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+          {/* Əlaqəli məhsullar bölməsi silindi - istifadəçi tələbi */}
 
         </div>
 
@@ -814,6 +808,10 @@ export function ProductPageClient({
                       setSelectedMarketType("");
                       setSelectedMarket("");
                     }
+                    // Reset FPMA-specific filters when not FPMA
+                    if (v !== "FAO_FPMA") {
+                      setSelectedFpmaMarket("");
+                    }
                   }}
                 >
                   <SelectTrigger className="w-44">
@@ -826,6 +824,57 @@ export function ProductPageClient({
                         {source.icon} {source.name}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+
+                {/* GlobalPriceStage Filter - for all data sources */}
+                {availablePriceStages.length > 0 && (
+                  <Select
+                    value={selectedPriceStage}
+                    onValueChange={setSelectedPriceStage}
+                  >
+                    <SelectTrigger className="w-40">
+                      <Store className="w-4 h-4 mr-2 text-slate-400" />
+                      <SelectValue placeholder="Qiymət növü" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availablePriceStages.map((stage) => (
+                        <SelectItem key={stage.code} value={stage.code}>
+                          {stage.nameAz || stage.nameEn}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {/* GlobalMarket Filter - for all data sources */}
+                <Select
+                  value={selectedFpmaMarket || "national_avg"}
+                  onValueChange={(v) => setSelectedFpmaMarket(v === "national_avg" ? "" : v)}
+                >
+                  <SelectTrigger className="w-48">
+                    <MapPin className="w-4 h-4 mr-2 text-slate-400" />
+                    <SelectValue placeholder="Bazar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {/* National Average options for AZ data */}
+                    {selectedDataSource === "AGRO_AZ" ? (
+                      <>
+                        <SelectItem value="national_avg_monthly">National Average (Aylıq)</SelectItem>
+                        <SelectItem value="national_avg_weekly">National Average (Həftəlik)</SelectItem>
+                      </>
+                    ) : (
+                      <>
+                        <SelectItem value="national_avg">National Average</SelectItem>
+                        {availableFpmaMarkets.length > 0 ? (
+                          availableFpmaMarkets.map((market) => (
+                            <SelectItem key={market.id} value={market.id}>
+                              {market.name}
+                            </SelectItem>
+                          ))
+                        ) : null}
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
 
@@ -1109,168 +1158,7 @@ export function ProductPageClient({
             targetUnit={selectedUnit}
           />
 
-          {/* Bazar Qiymətləri - 2 Kart: Ən ucuz 5 və Ən baha 5 */}
-          {isGuest ? (
-            // Guest user - show login prompt
-            <Card>
-              <CardContent className="p-8">
-                <div className="relative">
-                  {/* Blurred preview */}
-                  <div className="opacity-20 grid grid-cols-2 gap-4">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <div key={i} className="h-14 bg-slate-200 rounded-lg" />
-                    ))}
-                  </div>
-                  
-                  {/* Login overlay */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="p-4 bg-white rounded-xl shadow-lg border border-slate-200 text-center max-w-sm">
-                      <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
-                        <Lock className="w-6 h-6 text-emerald-600" />
-                      </div>
-                      <h3 className="font-bold text-slate-900 mb-2">
-                        Bazar qiymətləri müqayisəsi
-                      </h3>
-                      <p className="text-sm text-slate-600 mb-4">
-                        Ən ucuz və ən baha bazarları görmək üçün hesabınıza daxil olun.
-                      </p>
-                      <Button asChild size="sm">
-                        <Link href="/login">Daxil ol</Link>
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Ən ucuz 5 bazar */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-lg bg-green-50">
-                      <ArrowDown className="w-4 h-4 text-green-600" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">Ən ucuz 5 bazar</CardTitle>
-                      <p className="text-xs text-slate-500 mt-1">
-                        {currencyInfo?.code || "AZN"}/{product.unit}
-                      </p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {cheapestMarkets.length > 0 ? (
-                    <div className="space-y-2">
-                      {cheapestMarkets.map((price, idx) => (
-                        <div
-                          key={price.id}
-                          className="flex items-center justify-between p-3 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors"
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-bold text-green-600 w-6">
-                              #{idx + 1}
-                            </span>
-                            <div>
-                              <p className="font-medium text-slate-900 text-sm">
-                                {price.market.name}
-                              </p>
-                              <p className="text-xs text-slate-500">
-                                {price.market.marketType?.nameAz || "Pərakəndə"}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold text-green-600">
-                              {formatConvertedPrice(Number(price.priceAvg))}
-                            </p>
-                            <p className="text-xs text-slate-400">
-                              {formatShortDate(price.date)}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-center text-slate-500 py-4">Məlumat yoxdur</p>
-                  )}
-                </CardContent>
-                
-                {/* Data source info */}
-                {cheapestMarkets.length > 0 && (
-                  <div className="px-6 pb-4">
-                    <p className="text-xs text-slate-400 border-t border-slate-100 pt-3">
-                      Məlumat mənbəyi: Azərbaycan Respublikası Kənd Təsərrüfatı Nazirliyi bazarları. 
-                      Məlumat dövrü: {stats?.dateRange?.from ? formatShortDate(stats.dateRange.from) : "N/A"} - {stats?.dateRange?.to ? formatShortDate(stats.dateRange.to) : "N/A"}
-                    </p>
-                  </div>
-                )}
-              </Card>
-
-              {/* Ən baha 5 bazar */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-lg bg-red-50">
-                      <ArrowUp className="w-4 h-4 text-red-600" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">Ən baha 5 bazar</CardTitle>
-                      <p className="text-xs text-slate-500 mt-1">
-                        {currencyInfo?.code || "AZN"}/{product.unit}
-                      </p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {expensiveMarkets.length > 0 ? (
-                    <div className="space-y-2">
-                      {expensiveMarkets.map((price, idx) => (
-                        <div
-                          key={price.id}
-                          className="flex items-center justify-between p-3 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors"
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-bold text-red-600 w-6">
-                              #{idx + 1}
-                            </span>
-                            <div>
-                              <p className="font-medium text-slate-900 text-sm">
-                                {price.market.name}
-                              </p>
-                              <p className="text-xs text-slate-500">
-                                {price.market.marketType?.nameAz || "Pərakəndə"}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold text-red-600">
-                              {formatConvertedPrice(Number(price.priceAvg))}
-                            </p>
-                            <p className="text-xs text-slate-400">
-                              {formatShortDate(price.date)}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-center text-slate-500 py-4">Məlumat yoxdur</p>
-                  )}
-                </CardContent>
-                
-                {/* Data source info */}
-                {expensiveMarkets.length > 0 && (
-                  <div className="px-6 pb-4">
-                    <p className="text-xs text-slate-400 border-t border-slate-100 pt-3">
-                      Məlumat mənbəyi: Azərbaycan Respublikası Kənd Təsərrüfatı Nazirliyi bazarları. 
-                      Məlumat dövrü: {stats?.dateRange?.from ? formatShortDate(stats.dateRange.from) : "N/A"} - {stats?.dateRange?.to ? formatShortDate(stats.dateRange.to) : "N/A"}
-                    </p>
-                  </div>
-                )}
-              </Card>
-            </div>
-          )}
+          {/* Ən ucuz/baha 5 bazar bölmələri silindi - istifadəçi tələbi */}
 
           {/* Rich Content Section - Tridge Style */}
           {productInfo && (productInfo.descriptionAz || productInfo.history || productInfo.uses) && (

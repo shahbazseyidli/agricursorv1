@@ -58,11 +58,18 @@ async function getProductData(slug: string, countryCode?: string) {
       fpmaCommodities: {
         include: {
           series: {
-            take: 10,
             include: {
-              country: true,
-              market: true,
+              country: {
+                include: { globalCountry: true }
+              },
+              market: {
+                include: { globalMarket: true }
+              },
               globalPriceStage: true,
+              prices: {
+                take: 500,
+                orderBy: { date: "desc" },
+              }
             }
           }
         }
@@ -124,7 +131,6 @@ async function getProductData(slug: string, countryCode?: string) {
             nameAz: true,
             nameEn: true,
             image: true,
-            imageUrl: true,
             _count: {
               select: {
                 localProducts: true,
@@ -217,6 +223,58 @@ async function getProductData(slug: string, countryCode?: string) {
     if (hasFaoData) dataSources.push({ code: "FAOSTAT", name: "FAOSTAT", icon: "🌍" });
     if (hasFpmaData) dataSources.push({ code: "FAO_FPMA", name: "FAO FPMA", icon: "📊" });
 
+    // Get all GlobalPriceStages from database for filtering
+    const allGlobalPriceStages = await prisma.globalPriceStage.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: "asc" },
+      select: {
+        id: true,
+        code: true,
+        nameAz: true,
+        nameEn: true,
+      }
+    });
+
+    // Get FPMA price stages available for this product
+    const fpmaSeriesWithPrices = globalProduct.fpmaCommodities.flatMap(c => c.series);
+    const fpmaPriceStages = [...new Set(fpmaSeriesWithPrices
+      .filter(s => s.globalPriceStage)
+      .map(s => s.globalPriceStage!.code)
+    )];
+
+    // Get AZ market types (which are linked to GlobalPriceStage)
+    const azMarketTypeCodes = azProduct?.productTypes 
+      ? [...new Set(markets.map(m => m.marketType?.code).filter(Boolean))]
+      : [];
+
+    // Combine all available price stages
+    const availablePriceStages = allGlobalPriceStages.filter(stage => 
+      fpmaPriceStages.includes(stage.code) || 
+      azMarketTypeCodes.includes(stage.code) ||
+      hasAzData // Include all for AZ as they use aggregates
+    );
+
+    // Get FPMA markets available for this product (filtered by country if selected)
+    const availableFpmaMarkets = [...new Set(fpmaSeriesWithPrices
+      .filter(s => s.market && (!countryCode || s.country.iso3?.toLowerCase() === countryCode.toLowerCase() || s.country.iso2?.toLowerCase() === countryCode.toLowerCase()))
+      .map(s => JSON.stringify({
+        id: s.market.id,
+        name: s.market.name,
+        globalMarketId: s.market.globalMarketId,
+        countryIso3: s.country.iso3,
+      }))
+    )].map(s => JSON.parse(s));
+
+    // Get FPMA countries with data
+    const fpmaCountriesWithData = [...new Set(fpmaSeriesWithPrices
+      .filter(s => s.prices && s.prices.length > 0)
+      .map(s => JSON.stringify({
+        iso3: s.country.iso3,
+        iso2: s.country.iso2 || s.country.globalCountry?.iso2,
+        name: s.country.nameEn,
+      }))
+    )].map(s => JSON.parse(s));
+
     // Prepare category info from GlobalCategory
     const categoryInfo = globalProduct.globalCategory ? {
       id: globalProduct.globalCategory.id,
@@ -251,7 +309,7 @@ async function getProductData(slug: string, countryCode?: string) {
         id: p.id,
         name: p.nameAz || p.nameEn,
         slug: p.slug,
-        image: p.image || p.imageUrl,
+        image: p.image,
         _count: { 
           prices: p._count.localProducts + p._count.euProducts + p._count.faoProducts + p._count.fpmaCommodities 
         }
@@ -279,6 +337,10 @@ async function getProductData(slug: string, countryCode?: string) {
       hasFpmaData,
       dataSources,
       productVarieties,
+      availablePriceStages,
+      availableFpmaMarkets,
+      fpmaCountriesWithData,
+      productImage: globalProduct.image,
     };
   }
 
@@ -422,6 +484,10 @@ async function getProductData(slug: string, countryCode?: string) {
     hasFpmaData: false,
     dataSources: [{ code: "AGRO_AZ", name: "Agro.gov.az", icon: "🇦🇿" }],
     productVarieties: [],
+    availablePriceStages: [],
+    availableFpmaMarkets: [],
+    fpmaCountriesWithData: [],
+    productImage: null,
   };
 }
 
@@ -449,7 +515,11 @@ export default async function ProductPage({ params, searchParams }: Props) {
     hasFpmaData,
     dataSources,
     productVarieties,
-    globalProduct 
+    globalProduct,
+    availablePriceStages,
+    availableFpmaMarkets,
+    fpmaCountriesWithData,
+    productImage,
   } = data;
 
   // Prepare product info for Tridge-style rich content
@@ -462,7 +532,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
     varieties: globalProduct.varieties,
     storage: globalProduct.storage,
     seasonality: globalProduct.seasonality,
-    image: globalProduct.image || globalProduct.imageUrl,
+    image: globalProduct.image,
     faoCode: globalProduct.faoCode,
     hsCode: globalProduct.hsCode,
     eurostatCode: globalProduct.eurostatCode,
@@ -554,6 +624,10 @@ export default async function ProductPage({ params, searchParams }: Props) {
         dataSources={dataSources}
         productVarieties={productVarieties}
         productInfo={productInfo}
+        availablePriceStages={availablePriceStages}
+        availableFpmaMarkets={availableFpmaMarkets}
+        fpmaCountriesWithData={fpmaCountriesWithData}
+        productImage={productImage}
       />
     </div>
   );

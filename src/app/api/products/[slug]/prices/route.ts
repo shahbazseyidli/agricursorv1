@@ -102,10 +102,183 @@ export async function GET(
       }
     }
 
+    // Get data source from query param
+    const dataSource = searchParams.get("dataSource") || "auto";
+
+    // ============================================
+    // FAO FPMA DATA
+    // ============================================
+    if (dataSource === "FAO_FPMA" || (dataSource === "auto" && countryCode !== "AZ")) {
+      // Try FPMA data first for non-AZ countries
+      const globalProduct = await prisma.globalProduct.findUnique({
+        where: { slug },
+        include: {
+          fpmaCommodities: {
+            include: {
+              series: {
+                where: {
+                  country: {
+                    OR: [
+                      { iso2: countryCode },
+                      { iso3: countryCode },
+                    ]
+                  }
+                },
+                include: {
+                  country: true,
+                  market: true,
+                  globalPriceStage: true,
+                  prices: {
+                    where: {
+                      date: { gte: startDate, lte: endDate }
+                    },
+                    orderBy: { date: "asc" },
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+
+      if (globalProduct && globalProduct.fpmaCommodities.length > 0) {
+        const allSeries = globalProduct.fpmaCommodities.flatMap(c => c.series);
+        const allPrices = allSeries.flatMap(s => s.prices.map(p => ({
+          ...p,
+          market: s.market,
+          priceType: s.priceType,
+          globalPriceStage: s.globalPriceStage,
+          currency: s.currency,
+          measureUnit: s.measureUnit,
+        })));
+
+        if (allPrices.length > 0) {
+          // Get unique price stages
+          const uniquePriceStages = [...new Set(allSeries
+            .filter(s => s.globalPriceStage)
+            .map(s => JSON.stringify({
+              id: s.globalPriceStage!.id,
+              code: s.globalPriceStage!.code,
+              name: s.globalPriceStage!.nameAz || s.globalPriceStage!.nameEn,
+              hasData: true
+            }))
+          )].map(s => JSON.parse(s));
+
+          // Get unique markets
+          const uniqueMarkets = [...new Set(allSeries
+            .map(s => JSON.stringify({
+              id: s.market.id,
+              name: s.market.name,
+              hasData: true
+            }))
+          )].map(s => JSON.parse(s));
+
+          // Format for chart
+          const chartData = allPrices.map(p => ({
+            date: p.date.toISOString().split("T")[0],
+            priceMin: p.priceNormalized || p.price,
+            priceAvg: p.priceNormalized || p.price,
+            priceMax: p.priceNormalized || p.price,
+            market: p.market.name,
+            marketId: p.market.id,
+            marketType: p.priceType,
+            priceStage: p.globalPriceStage?.code,
+            priceUsd: p.priceUsd,
+            originalCurrency: p.currency,
+          })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+          // Latest price
+          const latestPriceData = allPrices[allPrices.length - 1];
+          const latestPrice = latestPriceData ? {
+            priceMin: latestPriceData.priceNormalized || latestPriceData.price,
+            priceAvg: latestPriceData.priceNormalized || latestPriceData.price,
+            priceMax: latestPriceData.priceNormalized || latestPriceData.price,
+            date: latestPriceData.date,
+            currency: latestPriceData.currency,
+            currencySymbol: latestPriceData.currency,
+            market: latestPriceData.market.name,
+            marketType: latestPriceData.priceType,
+          } : null;
+
+          // Price change
+          let priceChange = null;
+          if (allPrices.length >= 2) {
+            const latest = allPrices[allPrices.length - 1];
+            const prev = allPrices[Math.max(0, allPrices.length - 30)];
+            const change = (latest.priceNormalized || latest.price) - (prev.priceNormalized || prev.price);
+            const percentage = (change / (prev.priceNormalized || prev.price)) * 100;
+            priceChange = {
+              value: change,
+              percentage,
+              direction: change > 0 ? "up" : change < 0 ? "down" : "stable",
+            };
+          }
+
+          // Country info
+          const fpmaCountry = allSeries[0]?.country;
+
+          return NextResponse.json({
+            data: chartData,
+            comparisonData: [],
+            filters: {
+              marketTypes: uniquePriceStages,
+              markets: uniqueMarkets,
+              productTypes: [],
+              priceStages: uniquePriceStages
+            },
+            stats: {
+              latestPrice,
+              priceChange,
+              totalRecords: allPrices.length,
+              marketTypeStats: [],
+              priceChanges: {},
+              dateRange: {
+                from: allPrices[0]?.date,
+                to: allPrices[allPrices.length - 1]?.date
+              },
+              isGuest,
+              currency: {
+                code: latestPriceData?.currency || "USD",
+                symbol: latestPriceData?.currency || "$",
+                fxRate: 1
+              },
+              country: {
+                code: countryCode,
+                name: fpmaCountry?.nameEn || countryCode
+              },
+              source: "FAO_FPMA"
+            },
+          });
+        }
+      }
+      
+      // If FPMA data not found and dataSource was explicitly FAO_FPMA, return empty
+      if (dataSource === "FAO_FPMA") {
+        return NextResponse.json({
+          data: [],
+          comparisonData: [],
+          filters: { marketTypes: [], markets: [], productTypes: [], priceStages: [] },
+          stats: {
+            latestPrice: null,
+            priceChange: null,
+            totalRecords: 0,
+            marketTypeStats: [],
+            priceChanges: {},
+            dateRange: { from: null, to: null },
+            isGuest,
+            currency: { code: "USD", symbol: "$", fxRate: 1 },
+            country: { code: countryCode, name: countryCode },
+            source: "FAO_FPMA",
+            noData: true
+          },
+        });
+      }
+    }
+
     // ============================================
     // EU COUNTRY DATA
     // ============================================
-    if (countryCode !== "AZ") {
+    if (countryCode !== "AZ" && dataSource !== "AGRO_AZ") {
       // Find EU country
       const euCountry = await prisma.euCountry.findUnique({
         where: { code: countryCode }
