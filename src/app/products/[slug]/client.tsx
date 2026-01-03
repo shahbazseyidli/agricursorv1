@@ -64,6 +64,19 @@ interface ProductInfo {
   eurostatCode?: string | null;
 }
 
+interface DataSource {
+  code: string;
+  name: string;
+  icon: string;
+}
+
+interface ProductVariety {
+  id: string;
+  slug: string;
+  name: string;
+  hsCode?: string | null;
+}
+
 interface ProductPageClientProps {
   product: any;
   markets: any[];
@@ -71,10 +84,14 @@ interface ProductPageClientProps {
   relatedProducts: any[];
   allProducts: any[];
   allCategories: any[];
-  allCountries: { id: string; name: string; iso2: string; type: "local" | "eu" }[];
+  allCountries: { id: string; name: string; iso2: string; type: "local" | "eu" | "global"; flagEmoji?: string | null; region?: string | null }[];
   selectedCountry?: string;
   hasAzData?: boolean;
   hasEuData?: boolean;
+  hasFaoData?: boolean;
+  hasFpmaData?: boolean;
+  dataSources?: DataSource[];
+  productVarieties?: ProductVariety[];
   productInfo?: ProductInfo | null;
 }
 
@@ -105,6 +122,10 @@ export function ProductPageClient({
   selectedCountry = "AZ",
   hasAzData = true,
   hasEuData = false,
+  hasFaoData = false,
+  hasFpmaData = false,
+  dataSources = [],
+  productVarieties = [],
   productInfo,
 }: ProductPageClientProps) {
   const { data: session, status } = useSession();
@@ -118,15 +139,14 @@ export function ProductPageClient({
   const [selectedProductType, setSelectedProductType] = useState<string>("");
   const [dateRange, setDateRange] = useState("6m");
   
-  // Data source state
-  const [selectedDataSource, setSelectedDataSource] = useState<string>("AGRO_AZ");
+  // Data source state - default to first available source
+  const [selectedDataSource, setSelectedDataSource] = useState<string>(
+    dataSources.length > 0 ? dataSources[0].code : "AGRO_AZ"
+  );
   
-  // Data source options
-  const DATA_SOURCES = [
+  // Use dataSources from props (available data sources for this product)
+  const DATA_SOURCES = dataSources.length > 0 ? dataSources : [
     { code: "AGRO_AZ", name: "Agro.gov.az", icon: "🇦🇿" },
-    { code: "EUROSTAT", name: "Eurostat", icon: "🇪🇺" },
-    { code: "FAOSTAT", name: "FAOSTAT", icon: "🌍" },
-    { code: "FAO_FPMA", name: "FAO FPMA", icon: "📊" },
   ];
   
   // Only show markets filter for Azerbaijan with AGRO_AZ source

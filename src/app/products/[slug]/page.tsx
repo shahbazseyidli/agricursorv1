@@ -11,23 +11,59 @@ interface Props {
 }
 
 async function getProductData(slug: string, countryCode?: string) {
-  // First, try to find GlobalProduct
+  // First, try to find GlobalProduct with all relations
   const globalProduct = await prisma.globalProduct.findUnique({
     where: { slug },
     include: {
+      // Global Category
+      globalCategory: true,
+      // Product varieties
+      productVarieties: {
+        where: { isActive: true },
+        orderBy: { slug: "asc" },
+      },
+      // Local AZ products
       localProducts: {
         include: {
           category: true,
-          productTypes: true,
+          productTypes: {
+            include: {
+              globalProductVariety: true,
+            }
+          },
           country: true,
         }
       },
+      // EU products
       euProducts: {
         include: {
           prices: {
             take: 100,
             orderBy: { year: "desc" },
             include: { country: true }
+          }
+        }
+      },
+      // FAO products
+      faoProducts: {
+        include: {
+          prices: {
+            take: 100,
+            orderBy: { year: "desc" },
+            include: { country: true }
+          }
+        }
+      },
+      // FPMA commodities
+      fpmaCommodities: {
+        include: {
+          series: {
+            take: 10,
+            include: {
+              country: true,
+              market: true,
+              globalPriceStage: true,
+            }
           }
         }
       }
@@ -73,117 +109,89 @@ async function getProductData(slug: string, countryCode?: string) {
       });
     }
 
-    // Get related products
-    const relatedProducts = azProduct ? await prisma.product.findMany({
-      where: {
-        categoryId: azProduct.categoryId,
-        id: { not: azProduct.id },
-      },
-      take: 5,
-      include: {
-        _count: { select: { prices: true } },
-      },
-    }) : [];
+    // Get related products from GlobalProduct (same category)
+    const relatedProducts = globalProduct.globalCategoryId 
+      ? await prisma.globalProduct.findMany({
+          where: {
+            globalCategoryId: globalProduct.globalCategoryId,
+            id: { not: globalProduct.id },
+            isActive: true,
+          },
+          take: 5,
+          select: {
+            id: true,
+            slug: true,
+            nameAz: true,
+            nameEn: true,
+            image: true,
+            imageUrl: true,
+            _count: {
+              select: {
+                localProducts: true,
+                euProducts: true,
+                faoProducts: true,
+                fpmaCommodities: true,
+              }
+            }
+          }
+        })
+      : [];
 
-    // Get all products for dropdown
-    const allProducts = await prisma.product.findMany({
+    // Get all global products for dropdown
+    const allProducts = await prisma.globalProduct.findMany({
+      where: { isActive: true },
       select: {
         id: true,
-        name: true,
         slug: true,
-        categoryId: true,
-        globalProductId: true,
-        globalProduct: { select: { slug: true } }
+        nameAz: true,
+        nameEn: true,
+        globalCategoryId: true,
+        globalCategory: { select: { slug: true, nameAz: true } }
       },
-      orderBy: { name: "asc" },
+      orderBy: { nameAz: "asc" },
     });
 
-    // Get all categories
-    const allCategories = await prisma.category.findMany({
+    // Get all global categories
+    const allCategories = await prisma.globalCategory.findMany({
+      where: { isActive: true },
       select: {
         id: true,
-        name: true,
         slug: true,
-        products: {
-          take: 1,
-          select: { slug: true, globalProduct: { select: { slug: true } } },
-        },
+        nameAz: true,
+        nameEn: true,
+        _count: { select: { globalProducts: true } }
       },
-      orderBy: { name: "asc" },
+      orderBy: { sortOrder: "asc" },
     });
 
-    // Get all countries (AZ + EU + FAO + FPMA)
-    const azCountry = await prisma.country.findFirst({ where: { iso2: "AZ" } });
-    const euCountries = await prisma.euCountry.findMany({
+    // Get all countries from GlobalCountry
+    const globalCountries = await prisma.globalCountry.findMany({
       where: { isActive: true },
-      orderBy: { nameEn: "asc" }
-    });
-    const faoCountries = await prisma.faoCountry.findMany({
-      where: { isActive: true },
-      orderBy: { nameEn: "asc" }
-    });
-    const fpmaCountries = await prisma.fpmaCountry.findMany({
-      where: { isActive: true },
-      orderBy: { nameEn: "asc" }
-    });
-
-    // Create unified country list with deduplication
-    const countryMap = new Map<string, { id: string; name: string; iso2: string; type: "local" | "eu" | "fao" | "fpma" }>();
-    
-    // Add AZ first
-    if (azCountry) {
-      countryMap.set("AZ", {
-        id: azCountry.id,
-        name: azCountry.name,
-        iso2: "AZ",
-        type: "local"
-      });
-    }
-    
-    // Add EU countries
-    euCountries.forEach(c => {
-      if (!countryMap.has(c.code)) {
-        countryMap.set(c.code, {
-          id: c.id,
-          name: c.nameAz || c.nameEn,
-          iso2: c.code,
-          type: "eu"
-        });
-      }
-    });
-    
-    // Add FAO countries
-    faoCountries.forEach(c => {
-      const iso2 = c.iso2 || c.code.substring(0, 2);
-      if (!countryMap.has(iso2)) {
-        countryMap.set(iso2, {
-          id: c.id,
-          name: c.nameAz || c.nameEn,
-          iso2: iso2,
-          type: "fao"
-        });
-      }
-    });
-    
-    // Add FPMA countries
-    fpmaCountries.forEach(c => {
-      const iso2 = c.iso2 || c.iso3.substring(0, 2);
-      if (!countryMap.has(iso2)) {
-        countryMap.set(iso2, {
-          id: c.id,
-          name: c.nameAz || c.nameEn,
-          iso2: iso2,
-          type: "fpma"
-        });
+      orderBy: [
+        { isFeatured: "desc" },
+        { sortOrder: "asc" },
+        { nameEn: "asc" }
+      ],
+      select: {
+        id: true,
+        iso2: true,
+        iso3: true,
+        nameEn: true,
+        nameAz: true,
+        flagEmoji: true,
+        region: true,
       }
     });
 
-    const allCountries = Array.from(countryMap.values()).sort((a, b) => {
-      // AZ first
-      if (a.iso2 === "AZ") return -1;
-      if (b.iso2 === "AZ") return 1;
-      return a.name.localeCompare(b.name, "az");
-    });
+    // Map to unified format
+    const allCountries = globalCountries.map(c => ({
+      id: c.id,
+      name: c.nameAz || c.nameEn,
+      iso2: c.iso2,
+      type: "global" as const,
+      flagEmoji: c.flagEmoji,
+      region: c.region,
+    }));
 
     // Get EU price data for this product
     const euPriceData = globalProduct.euProducts.flatMap(ep => 
@@ -196,39 +204,94 @@ async function getProductData(slug: string, countryCode?: string) {
       }))
     );
 
+    // Check data availability per source
+    const hasAzData = globalProduct.localProducts.length > 0;
+    const hasEuData = globalProduct.euProducts.length > 0;
+    const hasFaoData = globalProduct.faoProducts.length > 0;
+    const hasFpmaData = globalProduct.fpmaCommodities.length > 0;
+
+    // Get available data sources
+    const dataSources = [];
+    if (hasAzData) dataSources.push({ code: "AGRO_AZ", name: "Agro.gov.az", icon: "🇦🇿" });
+    if (hasEuData) dataSources.push({ code: "EUROSTAT", name: "Eurostat", icon: "🇪🇺" });
+    if (hasFaoData) dataSources.push({ code: "FAOSTAT", name: "FAOSTAT", icon: "🌍" });
+    if (hasFpmaData) dataSources.push({ code: "FAO_FPMA", name: "FAO FPMA", icon: "📊" });
+
+    // Prepare category info from GlobalCategory
+    const categoryInfo = globalProduct.globalCategory ? {
+      id: globalProduct.globalCategory.id,
+      name: globalProduct.globalCategory.nameAz || globalProduct.globalCategory.nameEn,
+      slug: globalProduct.globalCategory.slug,
+    } : { id: "", name: "Digər", slug: "other" };
+
+    // Prepare product varieties
+    const productVarieties = globalProduct.productVarieties.map(v => ({
+      id: v.id,
+      slug: v.slug,
+      name: v.nameAz || v.nameEn,
+      hsCode: v.hsCode,
+    }));
+
     return {
       isGlobal: true,
       globalProduct,
-      product: azProduct || {
+      product: {
         id: globalProduct.id,
         name: globalProduct.nameAz || globalProduct.nameEn,
         nameEn: globalProduct.nameEn,
         slug: globalProduct.slug,
         unit: globalProduct.defaultUnit,
-        category: { id: "", name: globalProduct.category || "Digər", slug: globalProduct.category?.toLowerCase() || "other" },
-        productTypes: [],
-        country: azCountry || { id: "", name: "Azərbaycan", iso2: "AZ" }
+        category: categoryInfo,
+        productTypes: azProduct?.productTypes || [],
+        country: { id: "", name: "Azərbaycan", iso2: "AZ" }
       },
       markets,
       latestPrices,
-      relatedProducts,
-      allProducts,
-      allCategories,
+      relatedProducts: relatedProducts.map(p => ({
+        id: p.id,
+        name: p.nameAz || p.nameEn,
+        slug: p.slug,
+        image: p.image || p.imageUrl,
+        _count: { 
+          prices: p._count.localProducts + p._count.euProducts + p._count.faoProducts + p._count.fpmaCommodities 
+        }
+      })),
+      allProducts: allProducts.map(p => ({
+        id: p.id,
+        name: p.nameAz || p.nameEn,
+        slug: p.slug,
+        categoryId: p.globalCategoryId,
+        globalProductId: p.id,
+        globalProduct: { slug: p.slug }
+      })),
+      allCategories: allCategories.map(c => ({
+        id: c.id,
+        name: c.nameAz || c.nameEn,
+        slug: c.slug,
+        products: [{ slug: c.slug }]
+      })),
       allCountries,
       selectedCountry,
       euPriceData,
-      hasAzData: !!azProduct,
-      hasEuData: globalProduct.euProducts.length > 0
+      hasAzData,
+      hasEuData,
+      hasFaoData,
+      hasFpmaData,
+      dataSources,
+      productVarieties,
     };
   }
 
-  // Fall back to local AZ product
+  // Fall back to local AZ product (and create GlobalProduct reference if needed)
   const product = await prisma.product.findFirst({
     where: { slug },
     include: {
-      category: true,
+      category: {
+        include: { globalCategory: true }
+      },
       productTypes: true,
       country: true,
+      globalProduct: true,
     },
   });
 
@@ -270,54 +333,95 @@ async function getProductData(slug: string, countryCode?: string) {
     },
   });
 
-  const allProducts = await prisma.product.findMany({
+  // Get all global products for dropdown
+  const allProducts = await prisma.globalProduct.findMany({
+    where: { isActive: true },
     select: {
       id: true,
-      name: true,
       slug: true,
-      categoryId: true,
-      globalProductId: true,
-      globalProduct: { select: { slug: true } }
+      nameAz: true,
+      nameEn: true,
+      globalCategoryId: true,
     },
-    orderBy: { name: "asc" },
+    orderBy: { nameAz: "asc" },
   });
 
-  const allCategories = await prisma.category.findMany({
+  // Get all global categories
+  const allCategories = await prisma.globalCategory.findMany({
+    where: { isActive: true },
     select: {
       id: true,
-      name: true,
       slug: true,
-      products: {
-        take: 1,
-        select: { slug: true },
-      },
+      nameAz: true,
+      nameEn: true,
     },
-    orderBy: { name: "asc" },
+    orderBy: { sortOrder: "asc" },
   });
 
-  const allCountries = await prisma.country.findMany({
+  // Get all countries from GlobalCountry
+  const globalCountries = await prisma.globalCountry.findMany({
+    where: { isActive: true },
+    orderBy: [{ isFeatured: "desc" }, { nameEn: "asc" }],
     select: {
       id: true,
-      name: true,
       iso2: true,
-    },
-    orderBy: { name: "asc" },
+      nameEn: true,
+      nameAz: true,
+      flagEmoji: true,
+    }
   });
 
   return {
     isGlobal: false,
-    globalProduct: null,
-    product,
+    globalProduct: product.globalProduct,
+    product: {
+      ...product,
+      category: product.category.globalCategory 
+        ? { 
+            id: product.category.globalCategory.id, 
+            name: product.category.globalCategory.nameAz || product.category.globalCategory.nameEn,
+            slug: product.category.globalCategory.slug 
+          }
+        : { id: product.category.id, name: product.category.name, slug: product.category.slug }
+    },
     markets,
     latestPrices,
-    relatedProducts,
-    allProducts,
-    allCategories,
-    allCountries: allCountries.map(c => ({ ...c, type: "local" as const })),
+    relatedProducts: relatedProducts.map(p => ({
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      image: null,
+      _count: p._count
+    })),
+    allProducts: allProducts.map(p => ({
+      id: p.id,
+      name: p.nameAz || p.nameEn,
+      slug: p.slug,
+      categoryId: p.globalCategoryId,
+      globalProductId: p.id,
+      globalProduct: { slug: p.slug }
+    })),
+    allCategories: allCategories.map(c => ({
+      id: c.id,
+      name: c.nameAz || c.nameEn,
+      slug: c.slug,
+      products: [{ slug: c.slug }]
+    })),
+    allCountries: globalCountries.map(c => ({
+      id: c.id,
+      name: c.nameAz || c.nameEn,
+      iso2: c.iso2,
+      type: "global" as const,
+      flagEmoji: c.flagEmoji,
+    })),
     selectedCountry: "AZ",
     euPriceData: [],
     hasAzData: true,
-    hasEuData: false
+    hasEuData: false,
+    hasFaoData: false,
+    hasFpmaData: false,
+    dataSources: [{ code: "AGRO_AZ", name: "Agro.gov.az", icon: "🇦🇿" }],
+    productVarieties: [],
   };
 }
 
@@ -330,7 +434,23 @@ export default async function ProductPage({ params, searchParams }: Props) {
     notFound();
   }
 
-  const { product, markets, latestPrices, relatedProducts, allProducts, allCategories, allCountries, selectedCountry, hasAzData, hasEuData, globalProduct } = data;
+  const { 
+    product, 
+    markets, 
+    latestPrices, 
+    relatedProducts, 
+    allProducts, 
+    allCategories, 
+    allCountries, 
+    selectedCountry, 
+    hasAzData, 
+    hasEuData,
+    hasFaoData,
+    hasFpmaData,
+    dataSources,
+    productVarieties,
+    globalProduct 
+  } = data;
 
   // Prepare product info for Tridge-style rich content
   const productInfo = globalProduct ? {
@@ -342,10 +462,11 @@ export default async function ProductPage({ params, searchParams }: Props) {
     varieties: globalProduct.varieties,
     storage: globalProduct.storage,
     seasonality: globalProduct.seasonality,
-    image: globalProduct.image,
+    image: globalProduct.image || globalProduct.imageUrl,
     faoCode: globalProduct.faoCode,
     hsCode: globalProduct.hsCode,
     eurostatCode: globalProduct.eurostatCode,
+    fpmaCode: globalProduct.fpmaCode,
   } : null;
 
   return (
@@ -428,6 +549,10 @@ export default async function ProductPage({ params, searchParams }: Props) {
         selectedCountry={selectedCountry}
         hasAzData={hasAzData}
         hasEuData={hasEuData}
+        hasFaoData={hasFaoData}
+        hasFpmaData={hasFpmaData}
+        dataSources={dataSources}
+        productVarieties={productVarieties}
         productInfo={productInfo}
       />
     </div>

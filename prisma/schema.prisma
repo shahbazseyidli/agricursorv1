@@ -98,10 +98,84 @@ model GlobalCountry {
   euCountries    EuCountry[]   // Eurostat countries
   faoCountries   FaoCountry[]  // FAOSTAT countries
   fpmaCountries  FpmaCountry[] // FAO FPMA countries
+  
+  // Global markets in this country
+  globalMarkets  GlobalMarket[]
 
   @@index([region])
   @@index([subRegion])
   @@map("global_countries")
+}
+
+// ============================================
+// GLOBAL PRICE STAGES - Universal price stage system
+// ============================================
+
+model GlobalPriceStage {
+  id          String   @id @default(cuid())
+  code        String   @unique // WHOLESALE, RETAIL, PRODUCER, PROCESSING
+  
+  // Names
+  nameEn      String   @map("name_en") // Wholesale, Retail, Producer, Processing
+  nameAz      String?  @map("name_az") // Topdan, Pərakəndə, İstehsalçı, Xammal alışı
+  nameRu      String?  @map("name_ru")
+  
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Source mappings - which codes map to this stage
+  azMarketTypes    MarketType[]     // AZ market types linked
+  euPrices         EuPrice[]        // EU prices linked
+  faoPrices        FaoPrice[]       // FAO prices linked  
+  fpmaSeries       FpmaSerie[]      // FPMA series linked
+
+  @@map("global_price_stages")
+}
+
+// ============================================
+// GLOBAL MARKETS - Universal market system
+// ============================================
+
+model GlobalMarket {
+  id              String   @id @default(cuid())
+  
+  // Names
+  name            String   // National Average, Baku, Greater Buenos Aires
+  nameEn          String?  @map("name_en")
+  nameAz          String?  @map("name_az")
+  nameRu          String?  @map("name_ru")
+  
+  // Location
+  globalCountryId String   @map("global_country_id")
+  region          String?  // Region/Oblast within country
+  city            String?  // City name if applicable
+  
+  // Market characteristics
+  marketType      String?  @map("market_type") // PHYSICAL, NATIONAL_AVERAGE, REGIONAL
+  isNationalAvg   Boolean  @default(false) @map("is_national_avg")
+  
+  // Status
+  isActive        Boolean  @default(true) @map("is_active")
+  sortOrder       Int      @default(0) @map("sort_order")
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  globalCountry   GlobalCountry @relation(fields: [globalCountryId], references: [id])
+  
+  // Source mappings
+  azMarkets       Market[]      // AZ markets linked
+  fpmaMarkets     FpmaMarket[]  // FPMA markets linked
+
+  @@unique([globalCountryId, name])
+  @@index([globalCountryId])
+  @@index([marketType])
+  @@map("global_markets")
 }
 
 // ============================================
@@ -161,41 +235,47 @@ model GlobalCategory {
 // ============================================
 
 model MarketType {
-  id        String   @id @default(cuid())
-  code      String   @unique // WHOLESALE, PROCESSING, RETAIL, FIELD
-  nameAz    String   @map("name_az")
-  nameEn    String?  @map("name_en")
-  nameRu    String?  @map("name_ru")
-  countryId String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  code               String   @unique // WHOLESALE, PROCESSING, RETAIL, FIELD
+  nameAz             String   @map("name_az")
+  nameEn             String?  @map("name_en")
+  nameRu             String?  @map("name_ru")
+  countryId          String
+  globalPriceStageId String?  @map("global_price_stage_id") // Link to GlobalPriceStage
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  country    Country            @relation(fields: [countryId], references: [id])
-  markets    Market[]
-  aggregates AzPriceAggregate[]
+  country          Country           @relation(fields: [countryId], references: [id])
+  globalPriceStage GlobalPriceStage? @relation(fields: [globalPriceStageId], references: [id])
+  markets          Market[]
+  aggregates       AzPriceAggregate[]
 
   @@unique([countryId, code])
+  @@index([globalPriceStageId])
   @@map("market_types")
 }
 
 model Market {
-  id           String   @id @default(cuid())
-  name         String
-  nameEn       String?  @map("name_en")
-  nameRu       String?  @map("name_ru")
-  aliases      String? // Comma-separated aliases for Excel import mapping
-  countryId    String
-  marketTypeId String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String   @id @default(cuid())
+  name           String
+  nameEn         String?  @map("name_en")
+  nameRu         String?  @map("name_ru")
+  aliases        String? // Comma-separated aliases for Excel import mapping
+  countryId      String
+  marketTypeId   String
+  globalMarketId String?  @map("global_market_id") // Link to GlobalMarket
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  country    Country    @relation(fields: [countryId], references: [id])
-  marketType MarketType @relation(fields: [marketTypeId], references: [id])
-  prices     Price[]
+  country      Country       @relation(fields: [countryId], references: [id])
+  marketType   MarketType    @relation(fields: [marketTypeId], references: [id])
+  globalMarket GlobalMarket? @relation(fields: [globalMarketId], references: [id])
+  prices       Price[]
 
   @@unique([countryId, marketTypeId, name])
   @@index([countryId])
   @@index([marketTypeId])
+  @@index([globalMarketId])
   @@map("markets")
 }
 
@@ -556,30 +636,32 @@ model EuProduct {
 }
 
 model EuPrice {
-  id           String    @id @default(cuid())
-  countryId    String    @map("country_id")
-  productId    String    @map("product_id")
-  price        Float
-  currency     String    @default("EUR")
-  unit         String
-  source       String
-  sourceName   String?   @map("source_name")
-  sourceUrl    String?   @map("source_url")
-  priceStage   String?   @map("price_stage")
-  periodType   String    @map("period_type")
-  period       Int?
-  year         Int
-  startDate    DateTime? @map("start_date")
-  endDate      DateTime? @map("end_date")
-  variety      String?
-  market       String?
-  isCalculated Boolean   @default(false) @map("is_calculated")
-  fetchedAt    DateTime  @default(now()) @map("fetched_at")
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  countryId          String    @map("country_id")
+  productId          String    @map("product_id")
+  price              Float
+  currency           String    @default("EUR")
+  unit               String
+  source             String
+  sourceName         String?   @map("source_name")
+  sourceUrl          String?   @map("source_url")
+  priceStage         String?   @map("price_stage")
+  globalPriceStageId String?   @map("global_price_stage_id") // Link to GlobalPriceStage
+  periodType         String    @map("period_type")
+  period             Int?
+  year               Int
+  startDate          DateTime? @map("start_date")
+  endDate            DateTime? @map("end_date")
+  variety            String?
+  market             String?
+  isCalculated       Boolean   @default(false) @map("is_calculated")
+  fetchedAt          DateTime  @default(now()) @map("fetched_at")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  country EuCountry @relation(fields: [countryId], references: [id], onDelete: Cascade)
-  product EuProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  country          EuCountry         @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  product          EuProduct         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  globalPriceStage GlobalPriceStage? @relation(fields: [globalPriceStageId], references: [id])
 
   @@unique([countryId, productId, year, period, periodType, priceStage, variety])
   @@index([countryId])
@@ -587,6 +669,7 @@ model EuPrice {
   @@index([year, period])
   @@index([source])
   @@index([priceStage])
+  @@index([globalPriceStageId])
   @@map("eu_prices")
 }
 
@@ -700,31 +783,34 @@ model FaoProduct {
 }
 
 model FaoPrice {
-  id          String   @id @default(cuid())
-  countryId   String   @map("country_id")
-  productId   String   @map("product_id")
-  price       Float
-  currency    String
-  unit        String   @default("tonne")
-  elementCode String   @map("element_code")
-  elementName String   @map("element_name")
-  year        Int
-  periodType  String   @default("ANNUAL") @map("period_type")
-  flag        String?
-  source      String   @default("FAOSTAT")
-  sourceUrl   String?  @map("source_url")
-  fetchedAt   DateTime @default(now()) @map("fetched_at")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  countryId          String   @map("country_id")
+  productId          String   @map("product_id")
+  price              Float
+  currency           String
+  unit               String   @default("tonne")
+  elementCode        String   @map("element_code")
+  elementName        String   @map("element_name")
+  globalPriceStageId String?  @map("global_price_stage_id") // Link to GlobalPriceStage
+  year               Int
+  periodType         String   @default("ANNUAL") @map("period_type")
+  flag               String?
+  source             String   @default("FAOSTAT")
+  sourceUrl          String?  @map("source_url")
+  fetchedAt          DateTime @default(now()) @map("fetched_at")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  country FaoCountry @relation(fields: [countryId], references: [id], onDelete: Cascade)
-  product FaoProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  country          FaoCountry        @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  product          FaoProduct        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  globalPriceStage GlobalPriceStage? @relation(fields: [globalPriceStageId], references: [id])
 
   @@unique([countryId, productId, year, elementCode])
   @@index([countryId])
   @@index([productId])
   @@index([year])
   @@index([elementCode])
+  @@index([globalPriceStageId])
   @@map("fao_prices")
 }
 
@@ -797,13 +883,16 @@ model FpmaMarket {
   adminUnit          String?  @map("admin_unit")
   info               String?
   originalMarketType String?  @map("original_market_type")
+  globalMarketId     String?  @map("global_market_id") // Link to GlobalMarket
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  country FpmaCountry @relation(fields: [countryId], references: [id])
-  series  FpmaSerie[]
+  country      FpmaCountry   @relation(fields: [countryId], references: [id])
+  globalMarket GlobalMarket? @relation(fields: [globalMarketId], references: [id])
+  series       FpmaSerie[]
 
   @@index([countryId])
+  @@index([globalMarketId])
   @@map("fpma_markets")
 }
 
@@ -855,6 +944,7 @@ model FpmaSerie {
   marketId              String   @map("market_id")
   sourceId              String   @map("source_id")
   marketLocationTypeId  String?  @map("market_location_type_id")
+  globalPriceStageId    String?  @map("global_price_stage_id") // Link to GlobalPriceStage
   priceType             String   @map("price_type") // RETAIL, WHOLESALE
   currency              String
   measureUnit           String   @map("measure_unit") // Original: "Kg", "100 kg"
@@ -870,12 +960,14 @@ model FpmaSerie {
   market             FpmaMarket          @relation(fields: [marketId], references: [id])
   source             FpmaSource          @relation(fields: [sourceId], references: [id])
   marketLocationType MarketLocationType? @relation(fields: [marketLocationTypeId], references: [id])
+  globalPriceStage   GlobalPriceStage?   @relation(fields: [globalPriceStageId], references: [id])
   prices             FpmaPrice[]
 
   @@index([countryId])
   @@index([commodityId])
   @@index([priceType])
   @@index([marketLocationTypeId])
+  @@index([globalPriceStageId])
   @@map("fpma_series")
 }
 

@@ -89,6 +89,16 @@ const DEFAULT_COUNTRY_INFO = {
 async function getCountryData(code: string) {
   const upperCode = code.toUpperCase();
   
+  // First, try to find GlobalCountry
+  const globalCountry = await prisma.globalCountry.findFirst({
+    where: {
+      OR: [
+        { iso2: upperCode },
+        { iso3: upperCode }
+      ]
+    }
+  });
+  
   // Check if it's Azerbaijan (local country)
   if (upperCode === "AZ") {
     const country = await prisma.country.findFirst({
@@ -133,13 +143,17 @@ async function getCountryData(code: string) {
 
     return {
       countryType: "local" as const,
+      globalCountry,
       country: {
         id: country.id,
         code: "AZ",
-        nameAz: country.name,
-        nameEn: country.nameEn || "Azerbaijan",
-        nameRu: country.nameRu,
-        region: "South Caucasus",
+        nameAz: globalCountry?.nameAz || country.name,
+        nameEn: globalCountry?.nameEn || country.nameEn || "Azerbaijan",
+        nameRu: globalCountry?.nameRu || country.nameRu,
+        region: globalCountry?.region || "Asia",
+        subRegion: globalCountry?.subRegion || "Western Asia",
+        flagEmoji: globalCountry?.flagEmoji || "🇦🇿",
+        flagUrl: globalCountry?.flagUrl,
         _count: { prices: country._count.prices, markets: country._count.markets }
       },
       products: products.map(p => ({
@@ -235,8 +249,17 @@ async function getCountryData(code: string) {
 
     return {
       countryType: "eu" as const,
+      globalCountry,
       country: {
-        ...euCountry,
+        id: euCountry.id,
+        code: euCountry.code,
+        nameAz: globalCountry?.nameAz || euCountry.nameAz || euCountry.nameEn,
+        nameEn: globalCountry?.nameEn || euCountry.nameEn,
+        nameRu: globalCountry?.nameRu || euCountry.nameRu,
+        region: globalCountry?.region || "Europe",
+        subRegion: globalCountry?.subRegion,
+        flagEmoji: globalCountry?.flagEmoji,
+        flagUrl: globalCountry?.flagUrl,
         _count: { prices: euCountry._count.prices, markets: 0 }
       },
       products: productsWithCounts,
@@ -328,13 +351,17 @@ async function getCountryData(code: string) {
 
     return {
       countryType: "fpma" as const,
+      globalCountry,
       country: {
         id: fpmaCountry.id,
         code: fpmaCountry.iso2 || fpmaCountry.iso3.substring(0, 2),
-        nameAz: fpmaCountry.nameAz || fpmaCountry.nameEn,
-        nameEn: fpmaCountry.nameEn,
-        nameRu: null,
-        region: regionMap[fpmaCountry.iso3] || "Other",
+        nameAz: globalCountry?.nameAz || fpmaCountry.nameAz || fpmaCountry.nameEn,
+        nameEn: globalCountry?.nameEn || fpmaCountry.nameEn,
+        nameRu: globalCountry?.nameRu,
+        region: globalCountry?.region || regionMap[fpmaCountry.iso3] || "Other",
+        subRegion: globalCountry?.subRegion,
+        flagEmoji: globalCountry?.flagEmoji,
+        flagUrl: globalCountry?.flagUrl,
         _count: { prices: allPriceCount, markets: 0 }
       },
       products: productsWithCounts,
@@ -412,13 +439,17 @@ async function getCountryData(code: string) {
 
     return {
       countryType: "fao" as const,
+      globalCountry,
       country: {
         id: faoCountry.id,
         code: faoCountry.iso2 || faoCountry.code.substring(0, 2),
-        nameAz: faoCountry.nameAz || faoCountry.nameEn,
-        nameEn: faoCountry.nameEn,
-        nameRu: null,
-        region: "Other",
+        nameAz: globalCountry?.nameAz || faoCountry.nameAz || faoCountry.nameEn,
+        nameEn: globalCountry?.nameEn || faoCountry.nameEn,
+        nameRu: globalCountry?.nameRu,
+        region: globalCountry?.region || "Other",
+        subRegion: globalCountry?.subRegion,
+        flagEmoji: globalCountry?.flagEmoji,
+        flagUrl: globalCountry?.flagUrl,
         _count: { prices: faoCountry._count.prices, markets: 0 }
       },
       products: productsWithCounts,
@@ -485,9 +516,21 @@ export default async function CountryPage({ params }: { params: Promise<Params> 
           </div>
           
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-            <div className="text-7xl">{getFlagEmoji(country.code)}</div>
+            {/* Flag - use GlobalCountry flagUrl if available, otherwise emoji */}
+            {country.flagUrl ? (
+              <div className="w-24 h-16 rounded-lg overflow-hidden shadow-lg">
+                <img src={country.flagUrl} alt={country.nameEn} className="w-full h-full object-cover" />
+              </div>
+            ) : (
+              <div className="text-7xl">{country.flagEmoji || getFlagEmoji(country.code)}</div>
+            )}
             <div className="flex-1">
-              <Badge className="mb-2 bg-white/80">{country.region}</Badge>
+              <div className="flex gap-2 mb-2">
+                <Badge className="bg-white/80">{country.region}</Badge>
+                {country.subRegion && (
+                  <Badge variant="outline" className="bg-white/60">{country.subRegion}</Badge>
+                )}
+              </div>
               <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-2">
                 {country.nameAz || country.nameEn}
               </h1>
