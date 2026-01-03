@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# extra next folders
+/.next 2/
+
+# testsprite
+/testsprite_tests/
