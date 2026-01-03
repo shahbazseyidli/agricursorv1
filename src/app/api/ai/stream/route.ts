@@ -48,25 +48,28 @@ function extractKeywords(query: string): string[] {
   return keywords;
 }
 
-// Fetch product data in parallel - MINIMAL for speed
+// Fetch product data in parallel - FULL DATA for comprehensive analysis
 async function getProductData(product: { id: string; nameAz: string | null; nameEn: string }): Promise<string> {
-  // Only fetch the most essential data - 2 items each for speed
+  // Get latest year data from each source - one record per country
   const [azAggregates, euPrices, faoPrices] = await Promise.all([
+    // AZ: Get all market types for latest data
     prisma.globalAzAggregate.findMany({
       where: { globalProductId: product.id },
       orderBy: [{ year: "desc" }, { period: "desc" }],
-      take: 2,
+      take: 10, // Multiple market types
     }),
+    // EU: Get latest price per country (distinct countries)
     prisma.euPrice.findMany({
       where: { product: { globalProductId: product.id } },
       orderBy: [{ year: "desc" }, { period: "desc" }],
-      take: 2,
+      take: 50, // Get more to cover all countries
       include: { country: true },
     }),
+    // FAO: Get latest price per country
     prisma.faoPrice.findMany({
       where: { product: { globalProductId: product.id } },
       orderBy: { year: "desc" },
-      take: 2,
+      take: 50, // Get more to cover all countries
       include: { country: true },
     }),
   ]);
@@ -74,22 +77,34 @@ async function getProductData(product: { id: string; nameAz: string | null; name
   const lines: string[] = [];
   const name = product.nameAz || product.nameEn;
 
-  if (azAggregates.length > 0) {
-    const a = azAggregates[0];
-    lines.push(`${name} AZ: ${a.avgPrice.toFixed(2)} AZN/kg (${a.year})`);
+  // AZ data - show latest for each market type
+  const seenMarketTypes = new Set<string>();
+  for (const a of azAggregates) {
+    if (seenMarketTypes.has(a.marketTypeCode)) continue;
+    seenMarketTypes.add(a.marketTypeCode);
+    const marketName = a.marketTypeCode === "FARMGATE" ? "Sahə" : 
+                       a.marketTypeCode === "RETAIL" ? "Pərakəndə" :
+                       a.marketTypeCode === "WHOLESALE" ? "Topdan" : a.marketTypeCode;
+    lines.push(`AZ ${marketName}: ${a.avgPrice.toFixed(2)} AZN/kg (${a.year}) [Agro.gov.az]`);
   }
 
-  if (euPrices.length > 0) {
-    const e = euPrices[0];
-    lines.push(`${name} EU ${e.country.nameEn}: ${e.price.toFixed(0)} EUR/100kg (${e.year})`);
+  // EU data - show one per country (latest)
+  const seenEuCountries = new Set<string>();
+  for (const e of euPrices) {
+    if (seenEuCountries.has(e.country.code)) continue;
+    seenEuCountries.add(e.country.code);
+    lines.push(`${e.country.nameEn}: ${e.price.toFixed(0)} EUR/100kg (${e.year}) [EUROSTAT]`);
   }
 
-  if (faoPrices.length > 0) {
-    const f = faoPrices[0];
-    lines.push(`${name} FAO ${f.country.nameEn}: ${f.price.toFixed(0)} USD/ton (${f.year})`);
+  // FAO data - show one per country (latest)
+  const seenFaoCountries = new Set<string>();
+  for (const f of faoPrices) {
+    if (seenFaoCountries.has(f.country.code)) continue;
+    seenFaoCountries.add(f.country.code);
+    lines.push(`${f.country.nameEn}: ${f.price.toFixed(0)} USD/ton (${f.year}) [FAOSTAT]`);
   }
 
-  return lines.join("\n");
+  return `${name}:\n${lines.join("\n")}`;
 }
 
 // Fast context fetching
