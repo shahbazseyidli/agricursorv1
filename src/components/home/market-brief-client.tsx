@@ -325,10 +325,17 @@ export function MarketBriefClient({
                               <MessageSquare className="w-4 h-4 text-emerald-400" />
                             </div>
                             <div className="flex-1">
-                              <p className="text-white whitespace-pre-wrap leading-relaxed">
-                                {streamingAnswer}
-                                {isSearching && <span className="inline-block w-2 h-4 ml-1 bg-emerald-400 animate-pulse" />}
-                              </p>
+                              <div 
+                                className="text-white whitespace-pre-wrap leading-relaxed ai-response"
+                                dangerouslySetInnerHTML={{ 
+                                  __html: streamingAnswer
+                                    // Convert **bold** to styled spans
+                                    .replace(/\*\*([^*]+)\*\*/g, '<span class="font-bold text-emerald-400">$1</span>')
+                                    // Convert *italic* to styled spans
+                                    .replace(/\*([^*]+)\*/g, '<em class="text-slate-300">$1</em>')
+                                }}
+                              />
+                              {isSearching && <span className="inline-block w-2 h-4 ml-1 bg-emerald-400 animate-pulse" />}
                             </div>
                           </div>
                         </div>
