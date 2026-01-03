@@ -16,10 +16,11 @@ const SYSTEM_PROMPT = `Agricultural price analyst. STRICT RULES:
 1. ONLY use the [DATA] provided. If no data for a product, say "Bu məhsul üzrə datamız yoxdur".
 2. Never invent prices or data.
 3. ALWAYS include year with each price (e.g., "1.47 AZN/kg (2025)").
-4. ALWAYS mention data source: Agro.gov.az (AZ), EUROSTAT (EU), FAOSTAT (FAO).
-5. Specify price type: İstehsalçı qiyməti (Producer), Sahə qiyməti (Farmgate), Pərakəndə (Retail).
+4. ALWAYS mention data source: Agro.gov.az (AZ), EUROSTAT (EU), FAOSTAT (FAO), FAO FPMA (136 countries).
+5. Specify price type: İstehsalçı qiyməti (Producer), Sahə qiyməti (Farmgate), Pərakəndə (Retail), Topdan (Wholesale).
 6. Use **bold** for key numbers.
-7. Reply in user's language. Be brief and factual.`;
+7. Reply in user's language. Be brief and factual.
+8. FAO FPMA data covers 136 countries with retail/wholesale prices - use it for developing countries.`;
 
 // Extract relevant keywords from query
 function extractKeywords(query: string): string[] {
@@ -51,7 +52,7 @@ function extractKeywords(query: string): string[] {
 // Fetch product data in parallel - FULL DATA for comprehensive analysis
 async function getProductData(product: { id: string; nameAz: string | null; nameEn: string }): Promise<string> {
   // Get latest year data from each source - one record per country
-  const [azAggregates, euPrices, faoPrices] = await Promise.all([
+  const [azAggregates, euPrices, faoPrices, fpmaPrices] = await Promise.all([
     // AZ: Get all market types for latest data
     prisma.globalAzAggregate.findMany({
       where: { globalProductId: product.id },
@@ -71,6 +72,24 @@ async function getProductData(product: { id: string; nameAz: string | null; name
       orderBy: { year: "desc" },
       take: 50, // Get more to cover all countries
       include: { country: true },
+    }),
+    // FPMA: Get latest retail/wholesale prices from 136 countries
+    prisma.fpmaPrice.findMany({
+      where: { 
+        serie: { 
+          commodity: { globalProductId: product.id } 
+        } 
+      },
+      orderBy: { date: "desc" },
+      take: 100,
+      include: { 
+        serie: { 
+          include: { 
+            country: true,
+            commodity: true,
+          } 
+        } 
+      },
     }),
   ]);
 
@@ -102,6 +121,18 @@ async function getProductData(product: { id: string; nameAz: string | null; name
     if (seenFaoCountries.has(f.country.code)) continue;
     seenFaoCountries.add(f.country.code);
     lines.push(`${f.country.nameEn}: ${f.price.toFixed(0)} USD/ton (${f.year}) [FAOSTAT]`);
+  }
+
+  // FPMA data - show one per country (latest, retail/wholesale)
+  const seenFpmaCountries = new Set<string>();
+  for (const fp of fpmaPrices) {
+    const countryKey = `${fp.serie.country.iso3}-${fp.serie.priceType}`;
+    if (seenFpmaCountries.has(countryKey)) continue;
+    seenFpmaCountries.add(countryKey);
+    const priceType = fp.serie.priceType === "RETAIL" ? "Pərakəndə" : "Topdan";
+    const year = fp.date.getFullYear();
+    const price = fp.priceNormalized || fp.price;
+    lines.push(`${fp.serie.country.nameEn} (${priceType}): ${price.toFixed(2)} ${fp.serie.currency}/kg (${year}) [FAO FPMA]`);
   }
 
   return `${name}:\n${lines.join("\n")}`;

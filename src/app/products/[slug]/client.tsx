@@ -118,8 +118,19 @@ export function ProductPageClient({
   const [selectedProductType, setSelectedProductType] = useState<string>("");
   const [dateRange, setDateRange] = useState("6m");
   
-  // Only show markets filter for Azerbaijan
-  const showMarketsFilter = currentCountry === "AZ" && markets.length > 0;
+  // Data source state
+  const [selectedDataSource, setSelectedDataSource] = useState<string>("AGRO_AZ");
+  
+  // Data source options
+  const DATA_SOURCES = [
+    { code: "AGRO_AZ", name: "Agro.gov.az", icon: "🇦🇿" },
+    { code: "EUROSTAT", name: "Eurostat", icon: "🇪🇺" },
+    { code: "FAOSTAT", name: "FAOSTAT", icon: "🌍" },
+    { code: "FAO_FPMA", name: "FAO FPMA", icon: "📊" },
+  ];
+  
+  // Only show markets filter for Azerbaijan with AGRO_AZ source
+  const showMarketsFilter = currentCountry === "AZ" && markets.length > 0 && selectedDataSource === "AGRO_AZ";
   
   // Currency state
   const [selectedCurrency, setSelectedCurrency] = useState<string>("AZN");
@@ -559,18 +570,7 @@ export function ProductPageClient({
                 )}
               </div>
 
-              {product.productTypes.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-slate-200">
-                  <p className="text-xs text-slate-500 mb-2">Növləri</p>
-                  <div className="flex flex-wrap gap-2">
-                    {product.productTypes.map((pt: any) => (
-                      <Badge key={pt.id} variant="outline">
-                        {pt.name}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
+{/* Növləri bölməsi silindi - istifadəçi tələbi */}
             </CardContent>
           </Card>
 
@@ -784,7 +784,32 @@ export function ProductPageClient({
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
-                {/* Market Type Filter - yalnız AZ üçün */}
+                {/* Data Source Filter - always show */}
+                <Select 
+                  value={selectedDataSource} 
+                  onValueChange={(v) => {
+                    setSelectedDataSource(v);
+                    // Reset market filters when changing data source
+                    if (v !== "AGRO_AZ") {
+                      setSelectedMarketType("");
+                      setSelectedMarket("");
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-44">
+                    <Globe className="w-4 h-4 mr-2 text-slate-400" />
+                    <SelectValue placeholder="Data mənbəyi" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DATA_SOURCES.map((source) => (
+                      <SelectItem key={source.code} value={source.code}>
+                        {source.icon} {source.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Market Type Filter - yalnız AZ + AGRO_AZ üçün */}
                 {showMarketsFilter && (
                   <Select 
                     value={selectedMarketType || "all"} 
@@ -992,64 +1017,7 @@ export function ProductPageClient({
               </div>
             )}
 
-            {/* Müqayisə Filter Row - yalnız AZ üçün (bazar müqayisəsi) */}
-            {showMarketsFilter && (
-              <div className="px-6 pb-4 border-t border-slate-100 pt-4">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <div className="flex items-center gap-2 text-sm text-slate-600">
-                    <GitCompare className="w-4 h-4" />
-                    <span>Müqayisə:</span>
-                  </div>
-                  
-                  <Select 
-                    value={compareMarket || "none"} 
-                    onValueChange={(v) => setCompareMarket(v === "none" ? "" : v)}
-                  >
-                    <SelectTrigger className="w-52">
-                      <SelectValue placeholder="Bazar seçin..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Müqayisə etmə</SelectItem>
-                      {allMarketsForComparison.map((m: any) => (
-                        <SelectItem key={m.id} value={m.id}>
-                          {m.name} ({m.marketTypeName})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  {compareMarket && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setCompareMarket("")}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <X className="w-4 h-4 mr-1" />
-                      Təmizlə
-                    </Button>
-                  )}
-                </div>
-
-                {/* Müqayisə badge'ləri */}
-                {comparisonData.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                      {selectedMarket ? availableMarkets.find((m: any) => m.id === selectedMarket)?.name : "Bütün bazarlar"}
-                    </Badge>
-                    {comparisonData.map((cd: any) => (
-                      <Badge 
-                        key={cd.marketId} 
-                        variant="outline"
-                        className="bg-blue-50 text-blue-700 border-blue-200"
-                      >
-                        {cd.marketName}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+{/* Müqayisə dropdown silindi - istifadəçi tələbi. Aşağıdakı multi-source comparison istifadə olunur */}
 
             <CardContent>
               {isGuest ? (

@@ -5,6 +5,7 @@
  * - EC Agrifood: Weekly (Monday 06:00 UTC)
  * - Eurostat: Monthly (1st of month 06:00 UTC)
  * - FAOSTAT: Monthly (1st of month 07:00 UTC)
+ * - FAO FPMA: Daily (04:00 UTC) - Food prices from 136 countries
  * - AZ Aggregates: Daily (23:00 UTC)
  * 
  * Usage with external cron service:
@@ -15,6 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { syncLatestWeek as syncEcLatest } from "@/lib/services/ec-agrifood";
 import { syncLatestYear as syncEurostatLatest } from "@/lib/services/eurostat";
 import { syncLatestYear as syncFaoLatest } from "@/lib/services/fao-sync";
+import { syncLatest as syncFpmaLatest } from "@/lib/services/fpma-sync";
 import { syncAllAggregates } from "@/lib/services/az-aggregate";
 import { updateAllMatches } from "@/lib/services/product-matcher";
 
@@ -78,6 +80,13 @@ export async function POST(request: NextRequest) {
         console.log("FAO sync complete");
         break;
         
+      case "fpma":
+        // FAO FPMA sync (daily at 04:00 UTC)
+        console.log("Running FPMA sync...");
+        results.fpma = await syncFpmaLatest();
+        console.log("FPMA sync complete");
+        break;
+        
       case "daily":
         // Daily AZ aggregates calculation
         const currentYear = new Date().getFullYear();
@@ -94,6 +103,7 @@ export async function POST(request: NextRequest) {
         results.ecAgrifood = await syncEcLatest();
         results.eurostat = await syncEurostatLatest();
         results.faostat = await syncFaoLatest();
+        results.fpma = await syncFpmaLatest();
         results.matching = await updateAllMatches();
         results.azAggregates = await syncAllAggregates(thisYear, thisYear);
         console.log("Full sync complete");
@@ -132,15 +142,17 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     status: "ready",
     jobs: {
-      weekly: "EC Agrifood sync - run every Monday",
-      monthly: "Eurostat + FAO sync + matching - run 1st of month",
-      fao: "FAO sync only - run manually",
-      daily: "AZ aggregates - run daily at 23:00",
+      weekly: "EC Agrifood sync - run every Monday 06:00 UTC",
+      monthly: "Eurostat + FAO sync + matching - run 1st of month 06:00 UTC",
+      fao: "FAOSTAT Producer Prices sync - run manually",
+      fpma: "FAO FPMA Food Prices sync - run daily 04:00 UTC (136 countries)",
+      daily: "AZ aggregates - run daily at 23:00 UTC",
       full: "Full sync (all sources) - run manually when needed"
     },
     nextRun: {
       weekly: getNextMonday(),
       monthly: getFirstOfNextMonth(),
+      fpma: getTodayAt04(),
       daily: getTodayAt23()
     },
     currentJob: job || "none"
@@ -170,6 +182,16 @@ function getTodayAt23(): string {
     todayAt23.setDate(todayAt23.getDate() + 1);
   }
   return todayAt23.toISOString();
+}
+
+function getTodayAt04(): string {
+  const now = new Date();
+  const todayAt04 = new Date(now);
+  todayAt04.setHours(4, 0, 0, 0);
+  if (todayAt04 < now) {
+    todayAt04.setDate(todayAt04.getDate() + 1);
+  }
+  return todayAt04.toISOString();
 }
 
 

@@ -11,18 +11,69 @@ interface Params {
   slug: string;
 }
 
-// Category name mapping
+// Category name mapping - expanded to cover all variations
 const CATEGORY_MAPPING: Record<string, string[]> = {
-  "fruits": ["Fruits", "Meyvə", "Meyve"],
-  "vegetables": ["Vegetables", "Tərəvəz"],
-  "melons-gourds": ["Bostan"],
-  "cereals": ["Cereals", "Taxıl"],
-  "dairy": ["Dairy", "Süd məhsulları"],
+  "fruits": ["Fruits", "Meyvə", "Meyve", "Meyvələr", "Meyvələr və qoz-fındıq"],
+  "vegetables": ["Vegetables", "Tərəvəz", "Tərəvəzlər"],
+  "melons": ["Bostan", "Melons"],
+  "melons-gourds": ["Bostan", "Melons"],
+  "cereals": ["Cereals", "Taxıl", "Dənli bitkilər"],
+  "dairy": ["Dairy", "Süd məhsulları", "Süd"],
   "fish": ["Fish", "Balıq"],
+  "oils": ["Oils", "Yağlar", "Bitki yağları"],
+  "nuts": ["Nuts", "Qoz-fındıq"],
+  "other": ["Other", "Digər"],
+  // Legacy AZ slugs - redirect to standardized slugs
+  "meyve": ["Meyvə", "Fruits"],
+  "terevez": ["Tərəvəz", "Vegetables"],
 };
 
 async function getCategoryProducts(slug: string) {
-  // Find matching category names
+  // First try to find GlobalCategory by slug
+  const globalCategory = await prisma.globalCategory.findUnique({
+    where: { slug: slug },
+    include: {
+      globalProducts: {
+        where: { isActive: true },
+        include: {
+          localProducts: {
+            include: {
+              _count: { select: { prices: true } },
+              country: true
+            }
+          },
+          euProducts: {
+            include: {
+              _count: { select: { prices: true } }
+            }
+          },
+          faoProducts: {
+            include: {
+              _count: { select: { prices: true } }
+            }
+          },
+          fpmaCommodities: {
+            include: {
+              _count: { select: { series: true } }
+            }
+          }
+        },
+        orderBy: { nameEn: "asc" }
+      }
+    }
+  });
+
+  if (globalCategory) {
+    return {
+      categorySlug: globalCategory.slug,
+      categoryName: globalCategory.nameEn,
+      categoryNameAz: globalCategory.nameAz || globalCategory.nameEn,
+      globalProducts: globalCategory.globalProducts,
+      azProducts: []
+    };
+  }
+
+  // Fallback: Find matching category names from mapping
   const categoryNames = CATEGORY_MAPPING[slug] || [slug];
 
   // Get global products in this category
@@ -41,6 +92,16 @@ async function getCategoryProducts(slug: string) {
       euProducts: {
         include: {
           _count: { select: { prices: true } }
+        }
+      },
+      faoProducts: {
+        include: {
+          _count: { select: { prices: true } }
+        }
+      },
+      fpmaCommodities: {
+        include: {
+          _count: { select: { series: true } }
         }
       }
     },
@@ -91,12 +152,14 @@ export default async function CategoryPage({ params }: { params: Promise<Params>
   const { categoryName, categoryNameAz, globalProducts, azProducts } = data;
 
   // Build product list with stats
-  const products = globalProducts.map(gp => {
-    const azPriceCount = gp.localProducts.reduce((sum, p) => sum + p._count.prices, 0);
-    const euPriceCount = gp.euProducts.reduce((sum, p) => sum + p._count.prices, 0);
-    const totalPriceCount = azPriceCount + euPriceCount;
+  const products = globalProducts.map((gp: any) => {
+    const azPriceCount = gp.localProducts.reduce((sum: number, p: any) => sum + p._count.prices, 0);
+    const euPriceCount = gp.euProducts.reduce((sum: number, p: any) => sum + p._count.prices, 0);
+    const faoPriceCount = gp.faoProducts?.reduce((sum: number, p: any) => sum + p._count.prices, 0) || 0;
+    const fpmaSeriesCount = gp.fpmaCommodities?.reduce((sum: number, p: any) => sum + p._count.series, 0) || 0;
+    const totalPriceCount = azPriceCount + euPriceCount + faoPriceCount + (fpmaSeriesCount * 50);
     const countryCount = new Set([
-      ...gp.localProducts.map(p => p.country.iso2),
+      ...gp.localProducts.map((p: any) => p.country.iso2),
       ...gp.euProducts.flatMap(() => ["EU"]) // Simplified
     ]).size;
 
@@ -108,6 +171,8 @@ export default async function CategoryPage({ params }: { params: Promise<Params>
       nameRu: gp.nameRu,
       hasAzData: azPriceCount > 0,
       hasEuData: euPriceCount > 0,
+      hasFaoData: faoPriceCount > 0,
+      hasFpmaData: fpmaSeriesCount > 0,
       totalPriceCount,
       countryCount,
       eurostatCode: gp.eurostatCode
@@ -124,6 +189,8 @@ export default async function CategoryPage({ params }: { params: Promise<Params>
       nameRu: p.nameRu,
       hasAzData: true,
       hasEuData: false,
+      hasFaoData: false,
+      hasFpmaData: false,
       totalPriceCount: p._count.prices,
       countryCount: 1,
       eurostatCode: null
@@ -213,12 +280,22 @@ export default async function CategoryPage({ params }: { params: Promise<Params>
                   <div className="flex flex-wrap gap-1 mt-3">
                     {product.hasAzData && (
                       <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">
-                        🇦🇿 AZ
+                        🇦🇿
                       </Badge>
                     )}
                     {product.hasEuData && (
                       <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                        🇪🇺 EU
+                        🇪🇺
+                      </Badge>
+                    )}
+                    {product.hasFaoData && (
+                      <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+                        FAO
+                      </Badge>
+                    )}
+                    {product.hasFpmaData && (
+                      <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                        FPMA
                       </Badge>
                     )}
                   </div>

@@ -2,7 +2,7 @@
  * V2 Countries API
  * 
  * Returns all available countries with their data sources.
- * Each country can have multiple data sources: FAOSTAT, EUROSTAT, AGRO_AZ
+ * Each country can have multiple data sources: FAOSTAT, EUROSTAT, AGRO_AZ, FAO_FPMA
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -238,14 +238,102 @@ export async function GET(request: NextRequest) {
       }
     }
     
+    // 4. Get FPMA countries and add FAO_FPMA source (136 countries, retail/wholesale)
+    const fpmaCountries = await prisma.fpmaCountry.findMany({
+      where: { isActive: true },
+    });
+    
+    // ISO3 to ISO2 mapping for common countries
+    const ISO3_TO_ISO2: Record<string, string> = {
+      "AFG": "AF", "ALB": "AL", "DZA": "DZ", "AGO": "AO", "ARG": "AR",
+      "ARM": "AM", "AUS": "AU", "AUT": "AT", "AZE": "AZ", "BGD": "BD",
+      "BLR": "BY", "BEL": "BE", "BEN": "BJ", "BOL": "BO", "BIH": "BA",
+      "BWA": "BW", "BRA": "BR", "BGR": "BG", "BFA": "BF", "BDI": "BI",
+      "KHM": "KH", "CMR": "CM", "CAN": "CA", "CAF": "CF", "TCD": "TD",
+      "CHL": "CL", "CHN": "CN", "COL": "CO", "COD": "CD", "COG": "CG",
+      "CRI": "CR", "CIV": "CI", "HRV": "HR", "CYP": "CY", "CZE": "CZ",
+      "DNK": "DK", "DJI": "DJ", "DOM": "DO", "ECU": "EC", "EGY": "EG",
+      "SLV": "SV", "ETH": "ET", "FIN": "FI", "FRA": "FR", "GAB": "GA",
+      "GMB": "GM", "GEO": "GE", "DEU": "DE", "GHA": "GH", "GRC": "GR",
+      "GTM": "GT", "GIN": "GN", "GNB": "GW", "HTI": "HT", "HND": "HN",
+      "HUN": "HU", "IND": "IN", "IDN": "ID", "IRN": "IR", "IRQ": "IQ",
+      "IRL": "IE", "ISR": "IL", "ITA": "IT", "JAM": "JM", "JPN": "JP",
+      "JOR": "JO", "KAZ": "KZ", "KEN": "KE", "KGZ": "KG", "LAO": "LA",
+      "LVA": "LV", "LBN": "LB", "LSO": "LS", "LBR": "LR", "LBY": "LY",
+      "LTU": "LT", "MDG": "MG", "MWI": "MW", "MYS": "MY", "MLI": "ML",
+      "MRT": "MR", "MEX": "MX", "MDA": "MD", "MNG": "MN", "MAR": "MA",
+      "MOZ": "MZ", "MMR": "MM", "NAM": "NA", "NPL": "NP", "NLD": "NL",
+      "NZL": "NZ", "NIC": "NI", "NER": "NE", "NGA": "NG", "NOR": "NO",
+      "PAK": "PK", "PAN": "PA", "PRY": "PY", "PER": "PE", "PHL": "PH",
+      "POL": "PL", "PRT": "PT", "ROU": "RO", "RUS": "RU", "RWA": "RW",
+      "SEN": "SN", "SRB": "RS", "SLE": "SL", "SVK": "SK", "SVN": "SI",
+      "SOM": "SO", "ZAF": "ZA", "KOR": "KR", "SSD": "SS", "ESP": "ES",
+      "LKA": "LK", "SDN": "SD", "SWZ": "SZ", "SWE": "SE", "CHE": "CH",
+      "SYR": "SY", "TJK": "TJ", "TZA": "TZ", "THA": "TH", "TGO": "TG",
+      "TUN": "TN", "TUR": "TR", "TKM": "TM", "UGA": "UG", "UKR": "UA",
+      "GBR": "GB", "USA": "US", "URY": "UY", "UZB": "UZ", "VEN": "VE",
+      "VNM": "VN", "YEM": "YE", "ZMB": "ZM", "ZWE": "ZW",
+    };
+    
+    for (const fpma of fpmaCountries) {
+      const isoCode = ISO3_TO_ISO2[fpma.iso3] || fpma.iso2 || fpma.iso3.substring(0, 2);
+      
+      // Check if has data for this product
+      let hasData = true;
+      if (productSlug) {
+        const gp = await prisma.globalProduct.findUnique({
+          where: { slug: productSlug },
+          include: { fpmaCommodities: { select: { id: true } } },
+        });
+        
+        if (gp && gp.fpmaCommodities.length > 0) {
+          const serieCount = await prisma.fpmaSerie.count({
+            where: {
+              commodityId: { in: gp.fpmaCommodities.map(c => c.id) },
+              countryId: fpma.id,
+            },
+            take: 1,
+          });
+          hasData = serieCount > 0;
+        } else {
+          hasData = false;
+        }
+      }
+      
+      const fpmaSource: DataSource = {
+        code: "FAO_FPMA",
+        name: "FAO FPMA",
+        nameAz: "FAO Ərzaq Qiymətləri",
+        hasData,
+        currency: "Local", // Varies by country
+        unit: "kg",
+        periodTypes: ["WEEKLY", "MONTHLY"],
+      };
+      
+      if (countriesMap.has(isoCode)) {
+        // Add FPMA source to existing country
+        countriesMap.get(isoCode)!.dataSources.push(fpmaSource);
+      } else {
+        // Create new country entry
+        countriesMap.set(isoCode, {
+          code: isoCode,
+          name: fpma.nameEn,
+          nameAz: fpma.nameAz || fpma.nameEn,
+          flag: FLAGS[isoCode] || "🏳️",
+          dataSources: [fpmaSource],
+        });
+      }
+    }
+    
     // Convert to array and sort
     const countries = Array.from(countriesMap.values());
     
-    // Sort data sources by priority: FAOSTAT > EUROSTAT > AGRO_AZ
+    // Sort data sources by priority: FAO_FPMA > FAOSTAT > EUROSTAT > AGRO_AZ
     const sourcePriority: Record<string, number> = {
-      "FAOSTAT": 1,
-      "EUROSTAT": 2,
-      "AGRO_AZ": 3,
+      "FAO_FPMA": 1,
+      "FAOSTAT": 2,
+      "EUROSTAT": 3,
+      "AGRO_AZ": 4,
     };
     
     for (const country of countries) {

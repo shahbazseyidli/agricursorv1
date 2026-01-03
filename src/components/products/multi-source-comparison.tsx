@@ -69,6 +69,14 @@ const DATA_SOURCES: Record<string, {
     url: "https://www.fao.org/faostat",
     description: "BMT Ərzaq və Kənd Təsərrüfatı Təşkilatının qlobal məlumatları"
   },
+  FAO_FPMA: { 
+    name: "FAO FPMA", 
+    color: "#8B5CF6", 
+    shortName: "FPMA",
+    fullName: "FAO Ərzaq Qiymətləri Monitorinqi",
+    url: "https://fpma.fao.org",
+    description: "136 ölkədən həftəlik/aylıq pərakəndə və topdan qiymətlər"
+  },
 };
 
 // Market type options (for AGRO_AZ)

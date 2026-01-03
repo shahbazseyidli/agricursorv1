@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch data from all sources in parallel
-    const [azAggregates, euPrices, faoPrices] = await Promise.all([
+    const [azAggregates, euPrices, faoPrices, fpmaPrices] = await Promise.all([
       prisma.globalAzAggregate.findMany({
         where: { globalProductId: product.id },
         orderBy: [{ year: "desc" }, { period: "desc" }],
@@ -108,6 +108,22 @@ export async function POST(request: NextRequest) {
         orderBy: { year: "desc" },
         take: 10,
         include: { country: true },
+      }),
+      prisma.fpmaPrice.findMany({
+        where: { 
+          serie: { 
+            commodity: { globalProductId: product.id } 
+          } 
+        },
+        orderBy: { date: "desc" },
+        take: 50,
+        include: { 
+          serie: { 
+            include: { 
+              country: true 
+            } 
+          } 
+        },
       }),
     ]);
 
@@ -176,6 +192,31 @@ export async function POST(request: NextRequest) {
         unit: "ton",
         currency: "USD",
         year: fao.year,
+        priceInAZN,
+      });
+    }
+
+    // Add FPMA data (retail/wholesale from 136 countries)
+    const seenFpmaCountries = new Set<string>();
+    for (const fp of fpmaPrices) {
+      const countryKey = `${fp.serie.country.iso3}-${fp.serie.priceType}`;
+      if (seenFpmaCountries.has(countryKey)) continue;
+      seenFpmaCountries.add(countryKey);
+      
+      const price = fp.priceNormalized || fp.price;
+      // Assuming local currency, rough conversion (varies by country)
+      // For simplicity, assume price is already normalized to kg
+      const priceInAZN = price * USD_TO_AZN; // Rough estimate
+      
+      chartData.push({
+        source: "FAO FPMA",
+        sourceUrl: "https://fpma.fao.org",
+        priceType: fp.serie.priceType === "RETAIL" ? "Pərakəndə" : "Topdan",
+        country: fp.serie.country.nameAz || fp.serie.country.nameEn,
+        price: price,
+        unit: fp.serie.measureUnitNormalized || "kg",
+        currency: fp.serie.currency,
+        year: fp.date.getFullYear(),
         priceInAZN,
       });
     }

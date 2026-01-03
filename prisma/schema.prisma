@@ -1,5 +1,6 @@
 // Agri-Food Price Intelligence Platform
 // Database Schema - SQLite for prototyping
+// Version 2.0 - Added FPMA, GlobalCategory, Varieties
 
 generator client {
   provider = "prisma-client-js"
@@ -85,6 +86,30 @@ model Country {
 }
 
 // ============================================
+// GLOBAL CATEGORIES - Universal category system
+// ============================================
+
+model GlobalCategory {
+  id          String   @id @default(cuid())
+  code        String   @unique // HS2 code: "07", "08", "10"
+  slug        String   @unique // vegetables, fruits, cereals
+  nameEn      String   @map("name_en")
+  nameAz      String?  @map("name_az")
+  nameRu      String?  @map("name_ru")
+  description String?
+  icon        String? // emoji or icon name
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  globalProducts  GlobalProduct[]
+  localCategories Category[] // Local AZ categories linked to this global
+
+  @@map("global_categories")
+}
+
+// ============================================
 // MARKET STRUCTURE
 // ============================================
 
@@ -98,7 +123,7 @@ model MarketType {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  country    Country  @relation(fields: [countryId], references: [id])
+  country    Country            @relation(fields: [countryId], references: [id])
   markets    Market[]
   aggregates AzPriceAggregate[]
 
@@ -111,7 +136,7 @@ model Market {
   name         String
   nameEn       String?  @map("name_en")
   nameRu       String?  @map("name_ru")
-  aliases      String?  // Comma-separated aliases for Excel import mapping
+  aliases      String? // Comma-separated aliases for Excel import mapping
   countryId    String
   marketTypeId String
   createdAt    DateTime @default(now())
@@ -128,24 +153,47 @@ model Market {
 }
 
 // ============================================
-// PRODUCT STRUCTURE
+// MARKET LOCATION TYPES - Normalized types
+// ============================================
+
+model MarketLocationType {
+  id          String   @id @default(cuid())
+  code        String   @unique // NATIONAL_AVERAGE, CAPITAL_CITY, RETAIL...
+  nameEn      String   @map("name_en")
+  nameAz      String?  @map("name_az")
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  aliases     String? // JSON array of original FPMA values
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  fpmaSeries FpmaSerie[]
+
+  @@map("market_location_types")
+}
+
+// ============================================
+// LOCAL PRODUCT STRUCTURE (AZ)
 // ============================================
 
 model Category {
-  id        String   @id @default(cuid())
-  name      String
-  nameEn    String?  @map("name_en")
-  nameRu    String?  @map("name_ru")
-  slug      String
-  aliases   String?  // Comma-separated aliases for Excel import mapping
-  countryId String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String   @id @default(cuid())
+  name             String
+  nameEn           String?  @map("name_en")
+  nameRu           String?  @map("name_ru")
+  slug             String
+  aliases          String? // Comma-separated aliases for Excel import mapping
+  countryId        String
+  globalCategoryId String?  @map("global_category_id") // Link to global category
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  country  Country   @relation(fields: [countryId], references: [id])
-  products Product[]
+  country        Country         @relation(fields: [countryId], references: [id])
+  globalCategory GlobalCategory? @relation(fields: [globalCategoryId], references: [id])
+  products       Product[]
 
   @@unique([countryId, slug])
+  @@index([globalCategoryId])
   @@map("categories")
 }
 
@@ -156,7 +204,7 @@ model Product {
   nameRu          String?  @map("name_ru")
   slug            String
   unit            String   @default("kg")
-  aliases         String?  // Comma-separated aliases for Excel import mapping
+  aliases         String? // Comma-separated aliases for Excel import mapping
   categoryId      String
   countryId       String
   globalProductId String?  @map("global_product_id") // Link to global product
@@ -165,12 +213,12 @@ model Product {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  country       Country        @relation(fields: [countryId], references: [id])
-  category      Category       @relation(fields: [categoryId], references: [id])
-  globalProduct GlobalProduct? @relation(fields: [globalProductId], references: [id])
+  country       Country            @relation(fields: [countryId], references: [id])
+  category      Category           @relation(fields: [categoryId], references: [id])
+  globalProduct GlobalProduct?     @relation(fields: [globalProductId], references: [id])
   productTypes  ProductType[]
   prices        Price[]
-  euProducts    EuProduct[]    // Linked EU products for comparison
+  euProducts    EuProduct[] // Linked EU products for comparison
   aggregates    AzPriceAggregate[]
 
   @@unique([countryId, slug])
@@ -181,20 +229,23 @@ model Product {
 }
 
 model ProductType {
-  id        String   @id @default(cuid())
-  name      String
-  nameEn    String?  @map("name_en")
-  nameRu    String?  @map("name_ru")
-  aliases   String?  // Comma-separated aliases for Excel import mapping
-  productId String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  name                   String
+  nameEn                 String?  @map("name_en")
+  nameRu                 String?  @map("name_ru")
+  aliases                String? // Comma-separated aliases for Excel import mapping
+  productId              String
+  globalProductVarietyId String?  @map("global_product_variety_id") // Link to global variety
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
-  product    Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  prices     Price[]
-  aggregates AzPriceAggregate[]
+  product              Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  globalProductVariety GlobalProductVariety? @relation(fields: [globalProductVarietyId], references: [id])
+  prices               Price[]
+  aggregates           AzPriceAggregate[]
 
   @@unique([productId, name])
+  @@index([globalProductVarietyId])
   @@map("product_types")
 }
 
@@ -241,10 +292,11 @@ model Unit {
   nameAz         String   @map("name_az")
   nameEn         String   @map("name_en")
   nameRu         String?  @map("name_ru")
-  symbol         String?  // kg, lb, t
+  symbol         String? // kg, lb, t
   baseUnit       String   @default("kg") @map("base_unit") // Reference base unit
   conversionRate Float    @default(1) @map("conversion_rate") // Rate to convert to base unit
   category       String   @default("weight") // weight, volume, piece
+  fpmaAliases    String?  @map("fpma_aliases") // JSON: ["Kg", "1 kg", "kg"]
   isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -259,7 +311,7 @@ model Unit {
 model Currency {
   id          String   @id @default(cuid())
   code        String   @unique // AZN, USD, EUR, RUB, TRY
-  symbol      String   // ₼, $, €, ₽, ₺
+  symbol      String // ₼, $, €, ₽, ₺
   nameAz      String   @map("name_az")
   nameEn      String?  @map("name_en")
   nameRu      String?  @map("name_ru")
@@ -293,7 +345,7 @@ model Upload {
   id           String   @id @default(cuid())
   fileName     String   @map("file_name")
   fileSize     Int      @map("file_size")
-  type         String   // PRICES, PRODUCTS, MARKETS
+  type         String // PRICES, PRODUCTS, MARKETS
   status       String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
   recordsTotal Int?     @map("records_total")
   recordsNew   Int?     @map("records_new")
@@ -312,57 +364,98 @@ model Upload {
 // GLOBAL PRODUCTS - Universal product mapping
 // ============================================
 
-// Global product that maps local & EU products together
 model GlobalProduct {
-  id           String   @id @default(cuid())
-  slug         String   @unique // apple, tomato, potato
-  nameEn       String   @map("name_en") // Apple
-  nameAz       String?  @map("name_az") // Alma
-  nameRu       String?  @map("name_ru") // Яблоко
-  category     String?  // Fruits, Vegetables
-  faoCode      String?  @map("fao_code") // FAO Item Code (e.g., "515")
-  cpcCode      String?  @map("cpc_code") // CPC classification code (e.g., "01341")
-  hsCode       String?  @map("hs_code") // HS trade code
-  eurostatCode String?  @map("eurostat_code") // Eurostat code
-  defaultUnit  String   @default("kg") @map("default_unit")
-  image        String?  // Product image URL
-  
+  id     String  @id @default(cuid())
+  slug   String  @unique // apple, tomato, potato
+  hsCode String? @map("hs_code") // HS6: "070190", "080810"
+
+  // Names
+  nameEn String  @map("name_en") // Apple
+  nameAz String? @map("name_az") // Alma
+  nameRu String? @map("name_ru") // Яблоко
+
+  // Category link (new)
+  globalCategoryId String?         @map("global_category_id")
+  globalCategory   GlobalCategory? @relation(fields: [globalCategoryId], references: [id])
+
+  // Legacy category string (deprecated, for migration)
+  category String?
+
+  // External codes
+  faoCode      String? @map("fao_code") // FAO Item Code (e.g., "515")
+  cpcCode      String? @map("cpc_code") // CPC classification code
+  eurostatCode String? @map("eurostat_code") // Eurostat code
+  fpmaCode     String? @map("fpma_code") // FPMA base commodity code (e.g., "070190")
+
+  defaultUnit String  @default("kg") @map("default_unit")
+  image       String?
+
   // Rich content for product pages (Tridge-style)
-  descriptionAz String?  @map("description_az") // Full description in AZ
-  descriptionEn String?  @map("description_en") // Full description in EN
-  history       String?  // Product history/origin
-  uses          String?  // Common uses and culinary applications
-  nutrition     String?  // Nutritional information
-  varieties     String?  // Common varieties/cultivars
-  storage       String?  // Storage and handling info
-  seasonality   String?  // When it's in season
-  
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  descriptionAz String? @map("description_az")
+  descriptionEn String? @map("description_en")
+  history       String?
+  uses          String?
+  nutrition     String?
+  varieties     String? // Legacy text field
+  storage       String?
+  seasonality   String?
 
-  // Links to local & EU & FAO products
-  localProducts  Product[]
-  euProducts     EuProduct[]
-  faoProducts    FaoProduct[]
-  azAggregates   GlobalAzAggregate[]
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  // Relations
+  productVarieties GlobalProductVariety[]
+  localProducts    Product[]
+  euProducts       EuProduct[]
+  faoProducts      FaoProduct[]
+  fpmaCommodities  FpmaCommodity[]
+  azAggregates     GlobalAzAggregate[]
+
+  @@index([globalCategoryId])
   @@index([category])
   @@map("global_products")
+}
+
+// ============================================
+// GLOBAL PRODUCT VARIETIES
+// ============================================
+
+model GlobalProductVariety {
+  id              String @id @default(cuid())
+  globalProductId String @map("global_product_id")
+
+  slug   String // base, red, white, imported, organic
+  nameEn String  @map("name_en") // "Red", "White", "Imported"
+  nameAz String? @map("name_az") // "Qırmızı", "Ağ", "İdxal"
+  nameRu String? @map("name_ru")
+
+  // Source mappings
+  fpmaVarietyCode String? @map("fpma_variety_code") // "070190_2"
+
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  globalProduct GlobalProduct @relation(fields: [globalProductId], references: [id], onDelete: Cascade)
+  productTypes  ProductType[] // Link to local AZ product types
+
+  @@unique([globalProductId, slug])
+  @@index([fpmaVarietyCode])
+  @@map("global_product_varieties")
 }
 
 // ============================================
 // EU DATA - European Commission & Eurostat
 // ============================================
 
-// EU Countries (Member States)
 model EuCountry {
   id        String   @id @default(cuid())
   code      String   @unique // DE, FR, IT, ES, PL...
   nameAz    String?  @map("name_az")
   nameEn    String   @map("name_en")
   nameRu    String?  @map("name_ru")
-  region    String?  // Western Europe, Eastern Europe, Southern Europe...
+  region    String?
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -372,29 +465,26 @@ model EuCountry {
   @@map("eu_countries")
 }
 
-// EU Products from EC Agrifood & Eurostat
 model EuProduct {
-  id              String   @id @default(cuid())
-  eurostatCode    String?  @unique @map("eurostat_code") // 06110000 (FAO-compatible)
-  ecAgrifoodCode  String?  @map("ec_agrifood_code") // Apples, Tomatoes...
-  nameEn          String   @map("name_en")
-  nameAz          String?  @map("name_az")
-  nameRu          String?  @map("name_ru")
-  unit            String   @default("€/100kg") // €/100Kg, €/100L
-  category        String?  // Fruits, Vegetables, Cereals...
-  
-  // Link to Global Product (primary)
-  globalProductId String?  @map("global_product_id")
+  id             String  @id @default(cuid())
+  eurostatCode   String? @unique @map("eurostat_code")
+  ecAgrifoodCode String? @map("ec_agrifood_code")
+  nameEn         String  @map("name_en")
+  nameAz         String? @map("name_az")
+  nameRu         String? @map("name_ru")
+  unit           String  @default("€/100kg")
+  category       String?
+
+  globalProductId String?        @map("global_product_id")
   globalProduct   GlobalProduct? @relation(fields: [globalProductId], references: [id], onDelete: SetNull)
-  
-  // Legacy: Link to local AZ product (fuzzy matched)
-  localProductId  String?  @map("local_product_id")
-  localProduct    Product? @relation(fields: [localProductId], references: [id], onDelete: SetNull)
-  matchScore      Float?   @map("match_score") // Fuzzy match score 0-100
-  isManualMatch   Boolean  @default(false) @map("is_manual_match") // Admin manually matched
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+
+  localProductId String?  @map("local_product_id")
+  localProduct   Product? @relation(fields: [localProductId], references: [id], onDelete: SetNull)
+  matchScore     Float?   @map("match_score")
+  isManualMatch  Boolean  @default(false) @map("is_manual_match")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   prices EuPrice[]
 
@@ -404,34 +494,24 @@ model EuProduct {
   @@map("eu_products")
 }
 
-// EU Prices from EC Agrifood (weekly) & Eurostat (annual)
 model EuPrice {
   id           String    @id @default(cuid())
   countryId    String    @map("country_id")
   productId    String    @map("product_id")
-  price        Float     // Numeric price value
+  price        Float
   currency     String    @default("EUR")
-  unit         String    // €/100Kg, €/100L
-  
-  // Data source tracking
-  source       String    // EC_AGRIFOOD | EUROSTAT
-  sourceName   String?   @map("source_name") // "European Commission Agri-food Portal"
+  unit         String
+  source       String
+  sourceName   String?   @map("source_name")
   sourceUrl    String?   @map("source_url")
-  
-  // Price stage (supply chain position)
-  priceStage   String?   @map("price_stage") // Farmgate, Retail, Ex-packaging, Retail buying
-  
-  // Time period
-  periodType   String    @map("period_type") // Week, Month, Year
-  period       Int?      // 1-53 for weeks, 1-12 for months, null for years
+  priceStage   String?   @map("price_stage")
+  periodType   String    @map("period_type")
+  period       Int?
   year         Int
   startDate    DateTime? @map("start_date")
   endDate      DateTime? @map("end_date")
-  
-  // Product variety info
-  variety      String?   // "Apples - Golden delicious", "All types and varieties"
-  market       String?   // "National average (DE)"
-  
+  variety      String?
+  market       String?
   isCalculated Boolean   @default(false) @map("is_calculated")
   fetchedAt    DateTime  @default(now()) @map("fetched_at")
   createdAt    DateTime  @default(now())
@@ -453,39 +533,31 @@ model EuPrice {
 // AZ AGGREGATE PRICES - Weekly/Monthly averages
 // ============================================
 
-// Aggregated AZ prices by market type (for EU comparison)
 model AzPriceAggregate {
   id            String   @id @default(cuid())
   productId     String   @map("product_id")
   productTypeId String?  @map("product_type_id")
   countryId     String   @map("country_id")
   marketTypeId  String   @map("market_type_id")
-  
-  // Aggregated values
   avgPrice      Float    @map("avg_price")
   minPrice      Float    @map("min_price")
   maxPrice      Float    @map("max_price")
-  priceCount    Int      @map("price_count") // Number of markets included
-  
-  // Time period
-  periodType    String   @map("period_type") // Week, Month
-  period        Int      // 1-53 for weeks, 1-12 for months
+  priceCount    Int      @map("price_count")
+  periodType    String   @map("period_type")
+  period        Int
   year          Int
   startDate     DateTime @map("start_date")
   endDate       DateTime @map("end_date")
-  
-  // Source tracking
   source        String   @default("agro.gov.az")
   sourceName    String   @default("Azərbaycan Kənd Təsərrüfatı Nazirliyi (agro.gov.az)") @map("source_name")
-  
   calculatedAt  DateTime @default(now()) @map("calculated_at")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product     Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
   productType ProductType? @relation(fields: [productTypeId], references: [id], onDelete: SetNull)
-  country     Country     @relation(fields: [countryId], references: [id], onDelete: Cascade)
-  marketType  MarketType  @relation(fields: [marketTypeId], references: [id], onDelete: Cascade)
+  country     Country      @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  marketType  MarketType   @relation(fields: [marketTypeId], references: [id], onDelete: Cascade)
 
   @@unique([productId, productTypeId, marketTypeId, countryId, year, period, periodType])
   @@index([productId])
@@ -499,19 +571,19 @@ model AzPriceAggregate {
 // ============================================
 
 model EuDataSync {
-  id           String   @id @default(cuid())
-  source       String   // EC_AGRIFOOD | EUROSTAT
-  syncType     String   @map("sync_type") // FULL | INCREMENTAL
-  status       String   @default("PENDING") // PENDING, RUNNING, COMPLETED, FAILED
-  recordsTotal Int?     @map("records_total")
-  recordsNew   Int?     @map("records_new")
-  recordsUpdated Int?   @map("records_updated")
-  recordsError Int?     @map("records_error")
-  errorMessage String?  @map("error_message")
-  startedAt    DateTime? @map("started_at")
-  completedAt  DateTime? @map("completed_at")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String    @id @default(cuid())
+  source         String
+  syncType       String    @map("sync_type")
+  status         String    @default("PENDING")
+  recordsTotal   Int?      @map("records_total")
+  recordsNew     Int?      @map("records_new")
+  recordsUpdated Int?      @map("records_updated")
+  recordsError   Int?      @map("records_error")
+  errorMessage   String?   @map("error_message")
+  startedAt      DateTime? @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([source])
   @@index([status])
@@ -523,15 +595,15 @@ model EuDataSync {
 // FAO DATA - FAOSTAT Global Producer Prices
 // ============================================
 
-// FAO Countries (245+ countries)
 model FaoCountry {
   id        String   @id @default(cuid())
-  code      String   @unique // Area Code from FAO (e.g., "52" for Azerbaijan)
-  m49Code   String?  @map("m49_code") // UN M49 code
-  iso2      String?  // ISO 3166-1 alpha-2 code (e.g., "AZ")
+  code      String   @unique
+  m49Code   String?  @map("m49_code")
+  iso2      String?
+  iso3      String? // Added for FPMA compatibility
   nameEn    String   @map("name_en")
   nameAz    String?  @map("name_az")
-  region    String?  // Region grouping
+  region    String?
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -539,25 +611,22 @@ model FaoCountry {
   prices FaoPrice[]
 
   @@index([iso2])
+  @@index([iso3])
   @@map("fao_countries")
 }
 
-// FAO Products (Items from FAOSTAT)
 model FaoProduct {
-  id              String   @id @default(cuid())
-  itemCode        String   @unique @map("item_code") // FAO Item Code (e.g., "515" for Apples)
-  cpcCode         String?  @map("cpc_code") // CPC classification code
-  nameEn          String   @map("name_en") // "Apples"
-  nameAz          String?  @map("name_az")
-  category        String?  // Fruits, Vegetables, Cereals...
-  
-  // Link to Global Product
-  globalProductId String?  @map("global_product_id")
+  id              String         @id @default(cuid())
+  itemCode        String         @unique @map("item_code")
+  cpcCode         String?        @map("cpc_code")
+  nameEn          String         @map("name_en")
+  nameAz          String?        @map("name_az")
+  category        String?
+  globalProductId String?        @map("global_product_id")
   globalProduct   GlobalProduct? @relation(fields: [globalProductId], references: [id], onDelete: SetNull)
-  
-  isActive        Boolean  @default(true) @map("is_active")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  isActive        Boolean        @default(true) @map("is_active")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   prices FaoPrice[]
 
@@ -566,35 +635,23 @@ model FaoProduct {
   @@map("fao_products")
 }
 
-// FAO Prices - Global Producer Prices
 model FaoPrice {
-  id           String   @id @default(cuid())
-  countryId    String   @map("country_id")
-  productId    String   @map("product_id")
-  
-  // Price data
-  price        Float    // Price value
-  currency     String   // LCU, SLC, USD
-  unit         String   @default("tonne") // Always per tonne from FAO
-  
-  // Element type (price type)
-  elementCode  String   @map("element_code") // 5530=LCU, 5531=SLC, 5532=USD
-  elementName  String   @map("element_name") // "Producer Price (USD/tonne)"
-  
-  // Time period (annual only from FAO)
-  year         Int
-  periodType   String   @default("ANNUAL") @map("period_type")
-  
-  // Data quality flag
-  flag         String?  // A=Aggregate, E=Estimate, F=FAO estimate, etc.
-  
-  // Source tracking
-  source       String   @default("FAOSTAT")
-  sourceUrl    String?  @map("source_url")
-  
-  fetchedAt    DateTime @default(now()) @map("fetched_at")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(cuid())
+  countryId   String   @map("country_id")
+  productId   String   @map("product_id")
+  price       Float
+  currency    String
+  unit        String   @default("tonne")
+  elementCode String   @map("element_code")
+  elementName String   @map("element_name")
+  year        Int
+  periodType  String   @default("ANNUAL") @map("period_type")
+  flag        String?
+  source      String   @default("FAOSTAT")
+  sourceUrl   String?  @map("source_url")
+  fetchedAt   DateTime @default(now()) @map("fetched_at")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   country FaoCountry @relation(fields: [countryId], references: [id], onDelete: Cascade)
   product FaoProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -608,38 +665,28 @@ model FaoPrice {
 }
 
 // ============================================
-// GLOBAL AGGREGATE PRICES - For cross-country comparison
+// GLOBAL AZ AGGREGATE PRICES
 // ============================================
 
-// Aggregated AZ prices by GlobalProduct (not local Product)
 model GlobalAzAggregate {
-  id              String   @id @default(cuid())
-  globalProductId String   @map("global_product_id")
-  marketTypeCode  String   @map("market_type_code") // RETAIL, WHOLESALE, FARMGATE, PROCESSING
-  
-  // Aggregated values (all varieties, all markets)
-  avgPrice        Float    @map("avg_price")
-  minPrice        Float    @map("min_price")
-  maxPrice        Float    @map("max_price")
-  sampleCount     Int      @map("sample_count") // Number of price points included
-  
-  // Original currency/unit
-  currency        String   @default("AZN")
-  unit            String   @default("kg")
-  
-  // Time period
-  periodType      String   @map("period_type") // WEEKLY, MONTHLY, ANNUAL
-  period          Int?     // 1-53 for weeks, 1-12 for months, null for annual
+  id              String    @id @default(cuid())
+  globalProductId String    @map("global_product_id")
+  marketTypeCode  String    @map("market_type_code")
+  avgPrice        Float     @map("avg_price")
+  minPrice        Float     @map("min_price")
+  maxPrice        Float     @map("max_price")
+  sampleCount     Int       @map("sample_count")
+  currency        String    @default("AZN")
+  unit            String    @default("kg")
+  periodType      String    @map("period_type")
+  period          Int?
   year            Int
   startDate       DateTime? @map("start_date")
   endDate         DateTime? @map("end_date")
-  
-  // Source tracking
-  source          String   @default("agro.gov.az")
-  
-  calculatedAt    DateTime @default(now()) @map("calculated_at")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  source          String    @default("agro.gov.az")
+  calculatedAt    DateTime  @default(now()) @map("calculated_at")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   globalProduct GlobalProduct @relation(fields: [globalProductId], references: [id], onDelete: Cascade)
 
@@ -648,4 +695,159 @@ model GlobalAzAggregate {
   @@index([marketTypeCode])
   @@index([year, period])
   @@map("global_az_aggregates")
+}
+
+// ============================================
+// FAO FPMA DATA - Food Price Monitoring & Analysis
+// ============================================
+
+// FPMA Countries
+model FpmaCountry {
+  id        String   @id @default(cuid())
+  iso3      String   @unique // AFG, AZE, DEU
+  iso2      String? // AF, AZ, DE
+  nameEn    String   @map("name_en")
+  nameAz    String?  @map("name_az")
+  nameRu    String?  @map("name_ru")
+  region    String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  markets FpmaMarket[]
+  series  FpmaSerie[]
+
+  @@index([iso2])
+  @@map("fpma_countries")
+}
+
+// FPMA Markets
+model FpmaMarket {
+  id                 String   @id @default(cuid())
+  faoId              Int      @unique @map("fao_id")
+  name               String
+  countryId          String   @map("country_id")
+  adminUnit          String?  @map("admin_unit")
+  info               String?
+  originalMarketType String?  @map("original_market_type")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  country FpmaCountry @relation(fields: [countryId], references: [id])
+  series  FpmaSerie[]
+
+  @@index([countryId])
+  @@map("fpma_markets")
+}
+
+// FPMA Commodities (Stage - original data)
+model FpmaCommodity {
+  id              String         @id @default(cuid())
+  code            String         @unique // 070190_1, 080810_1
+  baseCode        String         @map("base_code") // 070190, 080810
+  nameEn          String         @map("name_en")
+  nameAz          String?        @map("name_az")
+  varietyName     String?        @map("variety_name") // "imported", "red", "white"
+  globalProductId String?        @map("global_product_id")
+  globalProduct   GlobalProduct? @relation(fields: [globalProductId], references: [id])
+  isActive        Boolean        @default(true) @map("is_active")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  series FpmaSerie[]
+
+  @@index([baseCode])
+  @@index([globalProductId])
+  @@map("fpma_commodities")
+}
+
+// FPMA Sources
+model FpmaSource {
+  id        String   @id @default(cuid())
+  faoId     Int      @unique @map("fao_id")
+  name      String
+  url       String?
+  country   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  series FpmaSerie[]
+
+  @@map("fpma_sources")
+}
+
+// FPMA Data Series
+model FpmaSerie {
+  id                    String   @id @default(cuid())
+  uuid                  String   @unique
+  countryId             String   @map("country_id")
+  commodityId           String   @map("commodity_id")
+  marketId              String   @map("market_id")
+  sourceId              String   @map("source_id")
+  marketLocationTypeId  String?  @map("market_location_type_id")
+  priceType             String   @map("price_type") // RETAIL, WHOLESALE
+  currency              String
+  measureUnit           String   @map("measure_unit") // Original: "Kg", "100 kg"
+  measureUnitNormalized String?  @map("measure_unit_normalized") // kg, liter
+  conversionFactor      Float?   @map("conversion_factor")
+  startDate             DateTime @map("start_date")
+  endDate               DateTime @map("end_date")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  country            FpmaCountry         @relation(fields: [countryId], references: [id])
+  commodity          FpmaCommodity       @relation(fields: [commodityId], references: [id])
+  market             FpmaMarket          @relation(fields: [marketId], references: [id])
+  source             FpmaSource          @relation(fields: [sourceId], references: [id])
+  marketLocationType MarketLocationType? @relation(fields: [marketLocationTypeId], references: [id])
+  prices             FpmaPrice[]
+
+  @@index([countryId])
+  @@index([commodityId])
+  @@index([priceType])
+  @@index([marketLocationTypeId])
+  @@map("fpma_series")
+}
+
+// FPMA Prices
+model FpmaPrice {
+  id              String   @id @default(cuid())
+  serieId         String   @map("serie_id")
+  price           Float
+  priceReal       Float?   @map("price_real")
+  priceUsd        Float?   @map("price_usd")
+  priceNormalized Float?   @map("price_normalized") // per kg, original currency
+  date            DateTime
+  periodicity     String // weekly, monthly
+  createdAt       DateTime @default(now())
+
+  serie FpmaSerie @relation(fields: [serieId], references: [id], onDelete: Cascade)
+
+  @@unique([serieId, date])
+  @@index([date])
+  @@map("fpma_prices")
+}
+
+// ============================================
+// FPMA DATA SYNC TRACKING
+// ============================================
+
+model FpmaDataSync {
+  id            String    @id @default(cuid())
+  syncType      String    @map("sync_type") // FULL, INCREMENTAL
+  status        String    @default("PENDING")
+  seriesTotal   Int?      @map("series_total")
+  seriesNew     Int?      @map("series_new")
+  seriesUpdated Int?      @map("series_updated")
+  pricesTotal   Int?      @map("prices_total")
+  pricesNew     Int?      @map("prices_new")
+  errorMessage  String?   @map("error_message")
+  startedAt     DateTime? @map("started_at")
+  completedAt   DateTime? @map("completed_at")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("fpma_data_syncs")
 }

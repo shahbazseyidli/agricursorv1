@@ -7,7 +7,7 @@ import { PublicHeader } from "@/components/layout/public-header";
 import { ProductsFilters } from "./products-filters";
 
 async function getProductsData() {
-  // Get all global products (includes both AZ and EU products)
+  // Get all global products with all related data sources
   const globalProducts = await prisma.globalProduct.findMany({
     where: { isActive: true },
     include: {
@@ -21,19 +21,18 @@ async function getProductsData() {
         include: {
           _count: { select: { prices: true } }
         }
-      }
-    },
-    orderBy: { nameEn: "asc" }
-  });
-  
-  // Also get EU products that don't have a global product link (unmatched)
-  const unmatchedEuProducts = await prisma.euProduct.findMany({
-    where: {
-      globalProductId: null,
-      prices: { some: {} } // Only get products with prices
-    },
-    include: {
-      _count: { select: { prices: true } }
+      },
+      faoProducts: {
+        include: {
+          _count: { select: { prices: true } }
+        }
+      },
+      fpmaCommodities: {
+        include: {
+          _count: { select: { series: true } }
+        }
+      },
+      globalCategory: true
     },
     orderBy: { nameEn: "asc" }
   });
@@ -43,42 +42,41 @@ async function getProductsData() {
     orderBy: { name: "asc" }
   });
 
-  // Combine global products with unmatched EU products
-  const allProducts = [
-    ...globalProducts.map(gp => ({
+  // Get global categories
+  const globalCategories = await prisma.globalCategory.findMany({
+    orderBy: { sortOrder: "asc" }
+  });
+
+  // Transform global products with all data sources
+  const allProducts = globalProducts.map(gp => {
+    const azPriceCount = gp.localProducts.reduce((sum, lp) => sum + lp._count.prices, 0);
+    const euPriceCount = gp.euProducts.reduce((sum, ep) => sum + ep._count.prices, 0);
+    const faoPriceCount = gp.faoProducts.reduce((sum, fp) => sum + fp._count.prices, 0);
+    const fpmaSeriesCount = gp.fpmaCommodities.reduce((sum, fc) => sum + fc._count.series, 0);
+    
+    return {
       id: gp.id,
       slug: gp.slug,
       nameAz: gp.nameAz || gp.nameEn,
       nameEn: gp.nameEn,
-      category: gp.category || "Digər",
+      category: gp.globalCategory?.nameAz || gp.category || "Digər",
       unit: gp.defaultUnit,
       image: gp.image,
       hasAzData: gp.localProducts.length > 0,
       hasEuData: gp.euProducts.length > 0,
-      azPriceCount: gp.localProducts.reduce((sum, lp) => sum + lp._count.prices, 0),
-      euPriceCount: gp.euProducts.reduce((sum, ep) => sum + ep._count.prices, 0),
-      totalPriceCount: gp.localProducts.reduce((sum, lp) => sum + lp._count.prices, 0) + 
-                       gp.euProducts.reduce((sum, ep) => sum + ep._count.prices, 0),
-      localCategory: gp.localProducts[0]?.category?.name
-    })),
-    ...unmatchedEuProducts.map(ep => ({
-      id: ep.id,
-      slug: ep.id, // Use ID as slug for unmatched
-      nameAz: ep.nameAz || ep.nameEn,
-      nameEn: ep.nameEn,
-      category: ep.category || "Digər",
-      unit: "kg",
-      image: null,
-      hasAzData: false,
-      hasEuData: true,
-      azPriceCount: 0,
-      euPriceCount: ep._count.prices,
-      totalPriceCount: ep._count.prices,
-      localCategory: null
-    }))
-  ];
+      hasFaoData: gp.faoProducts.length > 0,
+      hasFpmaData: gp.fpmaCommodities.length > 0,
+      azPriceCount,
+      euPriceCount,
+      faoPriceCount,
+      fpmaSeriesCount,
+      totalPriceCount: azPriceCount + euPriceCount + faoPriceCount + (fpmaSeriesCount * 50),
+      localCategory: gp.localProducts[0]?.category?.name,
+      globalCategorySlug: gp.globalCategory?.slug
+    };
+  });
 
-  return { products: allProducts, categories };
+  return { products: allProducts, categories, globalCategories };
 }
 
 interface PageProps {
@@ -86,7 +84,7 @@ interface PageProps {
 }
 
 export default async function ProductsPage({ searchParams }: PageProps) {
-  const { products: allProducts, categories } = await getProductsData();
+  const { products: allProducts, categories, globalCategories } = await getProductsData();
   
   // Filter products based on URL params
   const { q, category, source } = searchParams;
@@ -156,13 +154,13 @@ export default async function ProductsPage({ searchParams }: PageProps) {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <Card>
             <CardContent className="p-4 text-center">
               <p className="text-2xl font-bold text-emerald-600">
                 {products.filter(p => p.hasAzData).length}
               </p>
-              <p className="text-sm text-slate-500">🇦🇿 Azərbaycan məhsulları</p>
+              <p className="text-sm text-slate-500">🇦🇿 Azərbaycan</p>
             </CardContent>
           </Card>
           <Card>
@@ -170,15 +168,23 @@ export default async function ProductsPage({ searchParams }: PageProps) {
               <p className="text-2xl font-bold text-blue-600">
                 {products.filter(p => p.hasEuData).length}
               </p>
-              <p className="text-sm text-slate-500">🇪🇺 Avropa məhsulları</p>
+              <p className="text-sm text-slate-500">🇪🇺 Eurostat</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <p className="text-2xl font-bold text-amber-600">
+                {products.filter(p => p.hasFaoData).length}
+              </p>
+              <p className="text-sm text-slate-500">🌍 FAOSTAT</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
               <p className="text-2xl font-bold text-purple-600">
-                {products.filter(p => p.hasAzData && p.hasEuData).length}
+                {products.filter(p => p.hasFpmaData).length}
               </p>
-              <p className="text-sm text-slate-500">🌍 Müqayisəli məhsullar</p>
+              <p className="text-sm text-slate-500">📊 FAO FPMA</p>
             </CardContent>
           </Card>
         </div>
@@ -221,7 +227,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                           )}
                           
                           {/* Data Source Badges */}
-                          <div className="flex gap-1">
+                          <div className="flex gap-1 flex-wrap">
                             {product.hasAzData && (
                               <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">
                                 🇦🇿
@@ -230,6 +236,16 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                             {product.hasEuData && (
                               <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
                                 🇪🇺
+                              </Badge>
+                            )}
+                            {product.hasFaoData && (
+                              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+                                FAO
+                              </Badge>
+                            )}
+                            {product.hasFpmaData && (
+                              <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                                FPMA
                               </Badge>
                             )}
                           </div>
@@ -251,13 +267,8 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                           <div className="flex items-center gap-2">
                             <div className="flex items-center gap-1 text-sm text-slate-500">
                               <TrendingUp className="w-4 h-4" />
-                              <span>{product.totalPriceCount}</span>
+                              <span>{product.totalPriceCount.toLocaleString()}</span>
                             </div>
-                            {product.hasAzData && product.hasEuData && (
-                              <Badge variant="secondary" className="text-xs bg-purple-50 text-purple-700">
-                                Müqayisə
-                              </Badge>
-                            )}
                           </div>
                           <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
                         </div>
@@ -287,7 +298,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
         <div className="mt-12 text-center text-sm text-slate-400 border-t pt-8">
           <p className="flex items-center justify-center gap-2">
             <Globe className="w-4 h-4" />
-            Data mənbələri: agro.gov.az, Eurostat, EC Agri-food Data Portal
+            Data mənbələri: agro.gov.az, Eurostat, FAOSTAT, FAO FPMA (136 ölkə)
           </p>
         </div>
       </div>

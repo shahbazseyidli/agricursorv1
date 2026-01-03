@@ -35,7 +35,7 @@ const ISO_TO_FAO: Record<string, string> = Object.fromEntries(
 
 interface Selection {
   countryCode: string;
-  dataSource: string; // FAOSTAT | EUROSTAT | AGRO_AZ
+  dataSource: string; // FAOSTAT | EUROSTAT | AGRO_AZ | FAO_FPMA
 }
 
 interface PricePoint {
@@ -98,6 +98,7 @@ export async function GET(request: NextRequest) {
       include: {
         euProducts: { select: { id: true, nameEn: true } },
         faoProducts: { select: { id: true, itemCode: true, nameEn: true } },
+        fpmaCommodities: { select: { id: true, code: true, nameEn: true } },
       },
     });
     
@@ -194,6 +195,7 @@ async function getSeriesData(
     id: string;
     euProducts: { id: string; nameEn: string }[];
     faoProducts: { id: string; itemCode: string; nameEn: string }[];
+    fpmaCommodities: { id: string; code: string; nameEn: string }[];
   },
   periodType: string,
   marketType: string,
@@ -316,6 +318,128 @@ async function getSeriesData(
         period: d.period,
         price: d.price,
       })),
+    };
+  }
+  
+  if (dataSource === "FAO_FPMA") {
+    // ISO3 to ISO2 mapping
+    const ISO2_TO_ISO3: Record<string, string> = {
+      "AF": "AFG", "AL": "ALB", "DZ": "DZA", "AO": "AGO", "AR": "ARG",
+      "AM": "ARM", "AU": "AUS", "AT": "AUT", "AZ": "AZE", "BD": "BGD",
+      "BY": "BLR", "BE": "BEL", "BJ": "BEN", "BO": "BOL", "BA": "BIH",
+      "BW": "BWA", "BR": "BRA", "BG": "BGR", "BF": "BFA", "BI": "BDI",
+      "KH": "KHM", "CM": "CMR", "CA": "CAN", "CF": "CAF", "TD": "TCD",
+      "CL": "CHL", "CN": "CHN", "CO": "COL", "CD": "COD", "CG": "COG",
+      "CR": "CRI", "CI": "CIV", "HR": "HRV", "CY": "CYP", "CZ": "CZE",
+      "DK": "DNK", "DJ": "DJI", "DO": "DOM", "EC": "ECU", "EG": "EGY",
+      "SV": "SLV", "ET": "ETH", "FI": "FIN", "FR": "FRA", "GA": "GAB",
+      "GM": "GMB", "GE": "GEO", "DE": "DEU", "GH": "GHA", "GR": "GRC",
+      "GT": "GTM", "GN": "GIN", "GW": "GNB", "HT": "HTI", "HN": "HND",
+      "HU": "HUN", "IN": "IND", "ID": "IDN", "IR": "IRN", "IQ": "IRQ",
+      "IE": "IRL", "IL": "ISR", "IT": "ITA", "JM": "JAM", "JP": "JPN",
+      "JO": "JOR", "KZ": "KAZ", "KE": "KEN", "KG": "KGZ", "LA": "LAO",
+      "LV": "LVA", "LB": "LBN", "LS": "LSO", "LR": "LBR", "LY": "LBY",
+      "LT": "LTU", "MG": "MDG", "MW": "MWI", "MY": "MYS", "ML": "MLI",
+      "MR": "MRT", "MX": "MEX", "MD": "MDA", "MN": "MNG", "MA": "MAR",
+      "MZ": "MOZ", "MM": "MMR", "NA": "NAM", "NP": "NPL", "NL": "NLD",
+      "NZ": "NZL", "NI": "NIC", "NE": "NER", "NG": "NGA", "NO": "NOR",
+      "PK": "PAK", "PA": "PAN", "PY": "PRY", "PE": "PER", "PH": "PHL",
+      "PL": "POL", "PT": "PRT", "RO": "ROU", "RU": "RUS", "RW": "RWA",
+      "SN": "SEN", "RS": "SRB", "SL": "SLE", "SK": "SVK", "SI": "SVN",
+      "SO": "SOM", "ZA": "ZAF", "KR": "KOR", "SS": "SSD", "ES": "ESP",
+      "LK": "LKA", "SD": "SDN", "SZ": "SWZ", "SE": "SWE", "CH": "CHE",
+      "SY": "SYR", "TJ": "TJK", "TZ": "TZA", "TH": "THA", "TG": "TGO",
+      "TN": "TUN", "TR": "TUR", "TM": "TKM", "UG": "UGA", "UA": "UKR",
+      "GB": "GBR", "US": "USA", "UY": "URY", "UZ": "UZB", "VE": "VEN",
+      "VN": "VNM", "YE": "YEM", "ZM": "ZMB", "ZW": "ZWE",
+    };
+    
+    // Find FPMA country
+    const iso3 = ISO2_TO_ISO3[countryCode] || countryCode;
+    const fpmaCountry = await prisma.fpmaCountry.findFirst({
+      where: {
+        OR: [
+          { iso3: iso3 },
+          { iso2: countryCode },
+        ],
+      },
+    });
+    
+    if (!fpmaCountry || globalProduct.fpmaCommodities.length === 0) return null;
+    
+    const commodityIds = globalProduct.fpmaCommodities.map(c => c.id);
+    
+    // Get series for this country and commodities
+    const series = await prisma.fpmaSerie.findMany({
+      where: {
+        commodityId: { in: commodityIds },
+        countryId: fpmaCountry.id,
+        priceType: marketType === "WHOLESALE" ? "WHOLESALE" : "RETAIL",
+      },
+      select: { id: true, currency: true, measureUnitNormalized: true, conversionFactor: true },
+    });
+    
+    if (series.length === 0) return null;
+    
+    const seriesIds = series.map(s => s.id);
+    
+    // Get prices
+    const fpmaData = await prisma.fpmaPrice.findMany({
+      where: {
+        serieId: { in: seriesIds },
+        date: {
+          gte: new Date(`${yearFrom}-01-01`),
+          lte: new Date(`${yearTo}-12-31`),
+        },
+      },
+      orderBy: { date: "asc" },
+    });
+    
+    if (fpmaData.length === 0) return null;
+    
+    // Group by year/month and calculate average
+    const groupedData = new Map<string, { sum: number; count: number }>();
+    for (const d of fpmaData) {
+      const year = d.date.getFullYear();
+      const month = d.date.getMonth() + 1;
+      const key = periodType === "MONTHLY" ? `${year}-${month}` : `${year}`;
+      
+      if (!groupedData.has(key)) {
+        groupedData.set(key, { sum: 0, count: 0 });
+      }
+      const group = groupedData.get(key)!;
+      group.sum += d.priceNormalized || d.price;
+      group.count += 1;
+    }
+    
+    const data: PricePoint[] = [];
+    for (const [key, group] of groupedData) {
+      const parts = key.split("-");
+      data.push({
+        year: parseInt(parts[0]),
+        period: parts.length > 1 ? parseInt(parts[1]) : null,
+        price: group.sum / group.count,
+      });
+    }
+    
+    // Sort by year and period
+    data.sort((a, b) => {
+      if (a.year !== b.year) return a.year - b.year;
+      return (a.period || 0) - (b.period || 0);
+    });
+    
+    const firstSeries = series[0];
+    const priceTypeName = marketType === "WHOLESALE" ? "Topdansatış" : "Pərakəndə";
+    
+    return {
+      countryCode,
+      countryName: fpmaCountry.nameAz || fpmaCountry.nameEn,
+      dataSource: "FAO_FPMA",
+      sourceName: `FAO FPMA (${priceTypeName})`,
+      currency: firstSeries.currency || "USD",
+      unit: firstSeries.measureUnitNormalized || "kg",
+      periodType: periodType === "MONTHLY" ? "MONTHLY" : "ANNUAL",
+      data,
     };
   }
   

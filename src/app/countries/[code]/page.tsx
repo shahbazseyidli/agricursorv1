@@ -87,8 +87,10 @@ const DEFAULT_COUNTRY_INFO = {
 };
 
 async function getCountryData(code: string) {
+  const upperCode = code.toUpperCase();
+  
   // Check if it's Azerbaijan (local country)
-  if (code.toUpperCase() === "AZ") {
+  if (upperCode === "AZ") {
     const country = await prisma.country.findFirst({
       where: { iso2: "AZ" },
       include: {
@@ -168,91 +170,275 @@ async function getCountryData(code: string) {
     };
   }
 
-  // EU Country
-  const country = await prisma.euCountry.findUnique({
-    where: { code: code.toUpperCase() },
+  // Try EU Country first
+  const euCountry = await prisma.euCountry.findUnique({
+    where: { code: upperCode },
     include: {
       _count: { select: { prices: true } }
     }
   });
 
-  if (!country) return null;
+  if (euCountry) {
+    // Get products with prices for this country
+    const productsWithPrices = await prisma.euPrice.groupBy({
+      by: ["productId"],
+      where: { countryId: euCountry.id },
+      _count: { id: true },
+      _max: { year: true }
+    });
 
-  // Get products with prices for this country
-  const productsWithPrices = await prisma.euPrice.groupBy({
-    by: ["productId"],
-    where: { countryId: country.id },
-    _count: { id: true },
-    _max: { year: true }
-  });
+    // Get product details with global product info
+    const productIds = productsWithPrices.map(p => p.productId);
+    const products = await prisma.euProduct.findMany({
+      where: { id: { in: productIds } },
+      include: {
+        globalProduct: true
+      }
+    });
 
-  // Get product details with global product info
-  const productIds = productsWithPrices.map(p => p.productId);
-  const products = await prisma.euProduct.findMany({
-    where: { id: { in: productIds } },
+    // Merge price counts with products
+    const productsWithCounts = products.map(product => {
+      const priceInfo = productsWithPrices.find(p => p.productId === product.id);
+      return {
+        id: product.id,
+        slug: product.globalProduct?.slug || product.id,
+        nameEn: product.nameEn,
+        nameAz: product.nameAz || product.globalProduct?.nameAz || product.nameEn,
+        nameRu: product.nameRu || product.globalProduct?.nameRu,
+        category: product.category || "Digər",
+        eurostatCode: product.eurostatCode,
+        priceCount: priceInfo?._count.id || 0,
+        latestYear: priceInfo?._max.year || null,
+        image: product.globalProduct?.image
+      };
+    }).sort((a, b) => b.priceCount - a.priceCount);
+
+    // Get year range
+    const yearRange = await prisma.euPrice.aggregate({
+      where: { countryId: euCountry.id },
+      _min: { year: true },
+      _max: { year: true }
+    });
+
+    // Get sources
+    const sources = await prisma.euPrice.groupBy({
+      by: ["source"],
+      where: { countryId: euCountry.id },
+      _count: { id: true }
+    });
+
+    // Get price stats
+    const priceStats = await prisma.euPrice.aggregate({
+      where: { countryId: euCountry.id },
+      _avg: { price: true }
+    });
+
+    return {
+      countryType: "eu" as const,
+      country: {
+        ...euCountry,
+        _count: { prices: euCountry._count.prices, markets: 0 }
+      },
+      products: productsWithCounts,
+      yearRange: {
+        min: yearRange._min.year || 2020,
+        max: yearRange._max.year || new Date().getFullYear()
+      },
+      sources,
+      hasMarkets: false,
+      priceStats: {
+        avgPrice: priceStats._avg.price || 0,
+        minPrice: 0,
+        maxPrice: 0
+      },
+      topProducts: productsWithCounts.slice(0, 10),
+      info: COUNTRY_INFO[upperCode] || DEFAULT_COUNTRY_INFO
+    };
+  }
+
+  // Try FPMA Country (by iso2)
+  const fpmaCountry = await prisma.fpmaCountry.findFirst({
+    where: { 
+      OR: [
+        { iso2: upperCode },
+        { iso3: upperCode.length === 3 ? upperCode : undefined }
+      ],
+      isActive: true 
+    },
     include: {
-      globalProduct: true
+      _count: { select: { series: true } }
     }
   });
 
-  // Merge price counts with products
-  const productsWithCounts = products.map(product => {
-    const priceInfo = productsWithPrices.find(p => p.productId === product.id);
-    return {
-      id: product.id,
-      slug: product.globalProduct?.slug || product.id,
-      nameEn: product.nameEn,
-      nameAz: product.nameAz || product.globalProduct?.nameAz || product.nameEn,
-      nameRu: product.nameRu || product.globalProduct?.nameRu,
-      category: product.category || "Digər",
-      eurostatCode: product.eurostatCode,
-      priceCount: priceInfo?._count.id || 0,
-      latestYear: priceInfo?._max.year || null,
-      image: product.globalProduct?.image
+  if (fpmaCountry) {
+    // Get series for this country
+    const series = await prisma.fpmaSerie.findMany({
+      where: { countryId: fpmaCountry.id },
+      include: {
+        commodity: {
+          include: {
+            globalProduct: true
+          }
+        },
+        _count: { select: { prices: true } }
+      }
+    });
+
+    // Get unique products from series
+    const productMap = new Map<string, any>();
+    series.forEach(s => {
+      if (s.commodity && s.commodity.globalProduct) {
+        const gp = s.commodity.globalProduct;
+        if (!productMap.has(gp.id)) {
+          productMap.set(gp.id, {
+            id: gp.id,
+            slug: gp.slug,
+            nameEn: gp.nameEn,
+            nameAz: gp.nameAz || gp.nameEn,
+            nameRu: gp.nameRu,
+            category: gp.category || "Digər",
+            eurostatCode: gp.eurostatCode,
+            priceCount: s._count.prices,
+            latestYear: null,
+            image: gp.image
+          });
+        } else {
+          productMap.get(gp.id).priceCount += s._count.prices;
+        }
+      }
+    });
+
+    const productsWithCounts = Array.from(productMap.values())
+      .sort((a, b) => b.priceCount - a.priceCount);
+
+    // Get year range from prices
+    const allPriceCount = series.reduce((sum, s) => sum + s._count.prices, 0);
+
+    // Region mapping
+    const regionMap: Record<string, string> = {
+      "AZE": "South Caucasus", "GEO": "South Caucasus", "ARM": "South Caucasus",
+      "TUR": "Middle East", "IRN": "Middle East", "IRQ": "Middle East", "SYR": "Middle East",
+      "JOR": "Middle East", "LBN": "Middle East", "SAU": "Middle East", "YEM": "Middle East",
+      "KAZ": "Central Asia", "UZB": "Central Asia", "TKM": "Central Asia", 
+      "TJK": "Central Asia", "KGZ": "Central Asia",
+      "EGY": "Africa", "MAR": "Africa", "NGA": "Africa", "KEN": "Africa", "ETH": "Africa",
+      "CHN": "Asia", "IND": "Asia", "PAK": "Asia", "BGD": "Asia", "VNM": "Asia",
+      "USA": "Americas", "BRA": "Americas", "MEX": "Americas", "ARG": "Americas",
     };
-  }).sort((a, b) => b.priceCount - a.priceCount);
 
-  // Get year range
-  const yearRange = await prisma.euPrice.aggregate({
-    where: { countryId: country.id },
-    _min: { year: true },
-    _max: { year: true }
+    return {
+      countryType: "fpma" as const,
+      country: {
+        id: fpmaCountry.id,
+        code: fpmaCountry.iso2 || fpmaCountry.iso3.substring(0, 2),
+        nameAz: fpmaCountry.nameAz || fpmaCountry.nameEn,
+        nameEn: fpmaCountry.nameEn,
+        nameRu: null,
+        region: regionMap[fpmaCountry.iso3] || "Other",
+        _count: { prices: allPriceCount, markets: 0 }
+      },
+      products: productsWithCounts,
+      yearRange: {
+        min: 2000,
+        max: new Date().getFullYear()
+      },
+      sources: [{ source: "FAO_FPMA", _count: { id: allPriceCount } }],
+      hasMarkets: false,
+      priceStats: {
+        avgPrice: 0,
+        minPrice: 0,
+        maxPrice: 0
+      },
+      topProducts: productsWithCounts.slice(0, 10),
+      info: COUNTRY_INFO[upperCode] || DEFAULT_COUNTRY_INFO
+    };
+  }
+
+  // Try FAO Country (FAOSTAT)
+  const faoCountry = await prisma.faoCountry.findFirst({
+    where: { 
+      OR: [
+        { iso2: upperCode },
+        { code: upperCode.length === 3 ? upperCode : undefined }
+      ],
+      isActive: true 
+    },
+    include: {
+      _count: { select: { prices: true } }
+    }
   });
 
-  // Get sources
-  const sources = await prisma.euPrice.groupBy({
-    by: ["source"],
-    where: { countryId: country.id },
-    _count: { id: true }
-  });
+  if (faoCountry) {
+    // Get products with prices for this country
+    const productsWithPrices = await prisma.faoPrice.groupBy({
+      by: ["productId"],
+      where: { countryId: faoCountry.id },
+      _count: { id: true },
+      _max: { year: true }
+    });
 
-  // Get price stats
-  const priceStats = await prisma.euPrice.aggregate({
-    where: { countryId: country.id },
-    _avg: { price: true }
-  });
+    // Get product details with global product info
+    const productIds = productsWithPrices.map(p => p.productId);
+    const products = await prisma.faoProduct.findMany({
+      where: { id: { in: productIds } },
+      include: {
+        globalProduct: true
+      }
+    });
 
-  return {
-    countryType: "eu" as const,
-    country: {
-      ...country,
-      _count: { prices: country._count.prices, markets: 0 }
-    },
-    products: productsWithCounts,
-    yearRange: {
-      min: yearRange._min.year || 2020,
-      max: yearRange._max.year || new Date().getFullYear()
-    },
-    sources,
-    hasMarkets: false,
-    priceStats: {
-      avgPrice: priceStats._avg.price || 0,
-      minPrice: 0,
-      maxPrice: 0
-    },
-    topProducts: productsWithCounts.slice(0, 10),
-    info: COUNTRY_INFO[code.toUpperCase()] || DEFAULT_COUNTRY_INFO
-  };
+    // Merge price counts with products
+    const productsWithCounts = products.map(product => {
+      const priceInfo = productsWithPrices.find(p => p.productId === product.id);
+      return {
+        id: product.id,
+        slug: product.globalProduct?.slug || product.id,
+        nameEn: product.nameEn,
+        nameAz: product.globalProduct?.nameAz || product.nameEn,
+        nameRu: product.globalProduct?.nameRu,
+        category: product.globalProduct?.category || "Digər",
+        eurostatCode: product.globalProduct?.eurostatCode,
+        priceCount: priceInfo?._count.id || 0,
+        latestYear: priceInfo?._max.year || null,
+        image: product.globalProduct?.image
+      };
+    }).sort((a, b) => b.priceCount - a.priceCount);
+
+    // Get year range
+    const yearRange = await prisma.faoPrice.aggregate({
+      where: { countryId: faoCountry.id },
+      _min: { year: true },
+      _max: { year: true }
+    });
+
+    return {
+      countryType: "fao" as const,
+      country: {
+        id: faoCountry.id,
+        code: faoCountry.iso2 || faoCountry.code.substring(0, 2),
+        nameAz: faoCountry.nameAz || faoCountry.nameEn,
+        nameEn: faoCountry.nameEn,
+        nameRu: null,
+        region: "Other",
+        _count: { prices: faoCountry._count.prices, markets: 0 }
+      },
+      products: productsWithCounts,
+      yearRange: {
+        min: yearRange._min.year || 2000,
+        max: yearRange._max.year || new Date().getFullYear()
+      },
+      sources: [{ source: "FAOSTAT", _count: { id: faoCountry._count.prices } }],
+      hasMarkets: false,
+      priceStats: {
+        avgPrice: 0,
+        minPrice: 0,
+        maxPrice: 0
+      },
+      topProducts: productsWithCounts.slice(0, 10),
+      info: DEFAULT_COUNTRY_INFO
+    };
+  }
+
+  return null;
 }
 
 export default async function CountryPage({ params }: { params: Promise<Params> }) {
@@ -440,13 +626,17 @@ export default async function CountryPage({ params }: { params: Promise<Params> 
                   <span className="text-2xl">
                     {source.source === "EUROSTAT" ? "📊" : 
                      source.source === "EC_AGRIFOOD" ? "🇪🇺" :
-                     source.source === "AGRO_GOV_AZ" ? "🇦🇿" : "📈"}
+                     source.source === "AGRO_GOV_AZ" ? "🇦🇿" :
+                     source.source === "FAOSTAT" ? "🌍" :
+                     source.source === "FAO_FPMA" ? "📈" : "📊"}
                   </span>
                   <div>
                     <p className="font-medium text-slate-900">
                       {source.source === "EUROSTAT" ? "Eurostat" : 
                        source.source === "EC_AGRIFOOD" ? "EC Agri-food Data Portal" :
-                       source.source === "AGRO_GOV_AZ" ? "Azərbaycan Kənd Təsərrüfatı Nazirliyi" : source.source}
+                       source.source === "AGRO_GOV_AZ" ? "Azərbaycan Kənd Təsərrüfatı Nazirliyi" :
+                       source.source === "FAOSTAT" ? "FAO - Producer Prices" :
+                       source.source === "FAO_FPMA" ? "FAO FPMA - Food Prices" : source.source}
                     </p>
                     <p className="text-sm text-slate-500">{source._count.id.toLocaleString()} qeyd</p>
                   </div>

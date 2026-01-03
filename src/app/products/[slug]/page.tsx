@@ -112,27 +112,78 @@ async function getProductData(slug: string, countryCode?: string) {
       orderBy: { name: "asc" },
     });
 
-    // Get all countries (AZ + EU)
+    // Get all countries (AZ + EU + FAO + FPMA)
     const azCountry = await prisma.country.findFirst({ where: { iso2: "AZ" } });
     const euCountries = await prisma.euCountry.findMany({
       where: { isActive: true },
       orderBy: { nameEn: "asc" }
     });
+    const faoCountries = await prisma.faoCountry.findMany({
+      where: { isActive: true },
+      orderBy: { nameEn: "asc" }
+    });
+    const fpmaCountries = await prisma.fpmaCountry.findMany({
+      where: { isActive: true },
+      orderBy: { nameEn: "asc" }
+    });
 
-    const allCountries = [
-      ...(azCountry ? [{
+    // Create unified country list with deduplication
+    const countryMap = new Map<string, { id: string; name: string; iso2: string; type: "local" | "eu" | "fao" | "fpma" }>();
+    
+    // Add AZ first
+    if (azCountry) {
+      countryMap.set("AZ", {
         id: azCountry.id,
         name: azCountry.name,
         iso2: "AZ",
-        type: "local" as const
-      }] : []),
-      ...euCountries.map(c => ({
-        id: c.id,
-        name: c.nameAz || c.nameEn,
-        iso2: c.code,
-        type: "eu" as const
-      }))
-    ];
+        type: "local"
+      });
+    }
+    
+    // Add EU countries
+    euCountries.forEach(c => {
+      if (!countryMap.has(c.code)) {
+        countryMap.set(c.code, {
+          id: c.id,
+          name: c.nameAz || c.nameEn,
+          iso2: c.code,
+          type: "eu"
+        });
+      }
+    });
+    
+    // Add FAO countries
+    faoCountries.forEach(c => {
+      const iso2 = c.iso2 || c.code.substring(0, 2);
+      if (!countryMap.has(iso2)) {
+        countryMap.set(iso2, {
+          id: c.id,
+          name: c.nameAz || c.nameEn,
+          iso2: iso2,
+          type: "fao"
+        });
+      }
+    });
+    
+    // Add FPMA countries
+    fpmaCountries.forEach(c => {
+      const iso2 = c.iso2 || c.iso3.substring(0, 2);
+      if (!countryMap.has(iso2)) {
+        countryMap.set(iso2, {
+          id: c.id,
+          name: c.nameAz || c.nameEn,
+          iso2: iso2,
+          type: "fpma"
+        });
+      }
+    });
+
+    const allCountries = Array.from(countryMap.values()).sort((a, b) => {
+      // AZ first
+      if (a.iso2 === "AZ") return -1;
+      if (b.iso2 === "AZ") return 1;
+      return a.name.localeCompare(b.name, "az");
+    });
 
     // Get EU price data for this product
     const euPriceData = globalProduct.euProducts.flatMap(ep => 

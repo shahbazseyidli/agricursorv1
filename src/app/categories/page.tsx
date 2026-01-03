@@ -24,7 +24,44 @@ const CATEGORY_CONFIG: Record<string, { icon: React.ComponentType<{ className?: 
 };
 
 async function getCategories() {
-  // Get categories from GlobalProduct (unified source)
+  // Try to get from GlobalCategory first (preferred)
+  const globalCategories = await prisma.globalCategory.findMany({
+    where: { isActive: true },
+    include: {
+      _count: {
+        select: { globalProducts: true }
+      },
+      globalProducts: {
+        select: {
+          _count: {
+            select: {
+              localProducts: true,
+              euProducts: true,
+              faoProducts: true,
+              fpmaCommodities: true
+            }
+          }
+        }
+      }
+    },
+    orderBy: { sortOrder: "asc" }
+  });
+
+  if (globalCategories.length > 0) {
+    return globalCategories.map(cat => ({
+      id: cat.id,
+      slug: cat.slug, // Uses standardized slug: fruits, vegetables, etc.
+      nameAz: cat.nameAz || cat.nameEn,
+      nameEn: cat.nameEn,
+      productCount: cat._count.globalProducts,
+      hasAzData: cat.globalProducts.some(gp => gp._count.localProducts > 0),
+      hasEuData: cat.globalProducts.some(gp => gp._count.euProducts > 0),
+      hasFaoData: cat.globalProducts.some(gp => gp._count.faoProducts > 0),
+      hasFpmaData: cat.globalProducts.some(gp => gp._count.fpmaCommodities > 0)
+    }));
+  }
+
+  // Fallback: Get categories from GlobalProduct category field
   const globalProducts = await prisma.globalProduct.findMany({
     where: { isActive: true },
     select: { 
@@ -32,7 +69,9 @@ async function getCategories() {
       _count: {
         select: {
           localProducts: true,
-          euProducts: true
+          euProducts: true,
+          faoProducts: true,
+          fpmaCommodities: true
         }
       }
     }
@@ -42,43 +81,86 @@ async function getCategories() {
   const categoryMap: Record<string, { 
     productCount: number; 
     hasAzData: boolean; 
-    hasEuData: boolean 
+    hasEuData: boolean;
+    hasFaoData: boolean;
+    hasFpmaData: boolean;
   }> = {};
 
   globalProducts.forEach(p => {
     const cat = p.category || "Digər";
     if (!categoryMap[cat]) {
-      categoryMap[cat] = { productCount: 0, hasAzData: false, hasEuData: false };
+      categoryMap[cat] = { productCount: 0, hasAzData: false, hasEuData: false, hasFaoData: false, hasFpmaData: false };
     }
     categoryMap[cat].productCount += 1;
     if (p._count.localProducts > 0) categoryMap[cat].hasAzData = true;
     if (p._count.euProducts > 0) categoryMap[cat].hasEuData = true;
+    if (p._count.faoProducts > 0) categoryMap[cat].hasFaoData = true;
+    if (p._count.fpmaCommodities > 0) categoryMap[cat].hasFpmaData = true;
   });
 
-  // Build category list
-  const categories = Object.entries(categoryMap).map(([name, data]) => {
-    // Map English names to Azerbaijani
-    const nameMap: Record<string, string> = {
-      "Fruits": "Meyvə",
-      "Vegetables": "Tərəvəz",
-      "Cereals": "Taxıl",
-      "Dairy": "Süd məhsulları",
-      "Fish": "Balıq"
-    };
+  // Standardized slug mapping
+  const slugMap: Record<string, string> = {
+    "Fruits": "fruits",
+    "Meyvə": "fruits",
+    "Meyve": "fruits",
+    "Meyvələr": "fruits",
+    "Vegetables": "vegetables",
+    "Tərəvəz": "vegetables",
+    "Tərəvəzlər": "vegetables",
+    "Bostan": "melons",
+    "Cereals": "cereals",
+    "Taxıl": "cereals",
+    "Dairy": "dairy",
+    "Süd məhsulları": "dairy",
+    "Fish": "fish",
+    "Balıq": "fish",
+    "Digər": "other",
+    "Meyvələr və qoz-fındıq": "fruits"
+  };
 
-    return {
-      id: name.toLowerCase().replace(/\s+/g, "-"),
-      slug: name.toLowerCase().replace(/\s+/g, "-"),
-      nameAz: nameMap[name] || name,
-      nameEn: name,
-      productCount: data.productCount,
-      hasAzData: data.hasAzData,
-      hasEuData: data.hasEuData
-    };
+  // Map Azerbaijani names
+  const nameAzMap: Record<string, string> = {
+    "Fruits": "Meyvə",
+    "Vegetables": "Tərəvəz",
+    "Cereals": "Taxıl",
+    "Dairy": "Süd məhsulları",
+    "Fish": "Balıq",
+    "Bostan": "Bostan",
+    "Other": "Digər",
+    "melons": "Bostan"
+  };
+
+  // Build category list with standardized slugs
+  const categorySlugMap = new Map<string, any>();
+  
+  Object.entries(categoryMap).forEach(([name, data]) => {
+    const slug = slugMap[name] || name.toLowerCase().replace(/\s+/g, "-");
+    
+    if (categorySlugMap.has(slug)) {
+      // Merge with existing
+      const existing = categorySlugMap.get(slug);
+      existing.productCount += data.productCount;
+      if (data.hasAzData) existing.hasAzData = true;
+      if (data.hasEuData) existing.hasEuData = true;
+      if (data.hasFaoData) existing.hasFaoData = true;
+      if (data.hasFpmaData) existing.hasFpmaData = true;
+    } else {
+      categorySlugMap.set(slug, {
+        id: slug,
+        slug: slug,
+        nameAz: nameAzMap[name] || name,
+        nameEn: name === "Meyvə" ? "Fruits" : name === "Tərəvəz" ? "Vegetables" : name,
+        productCount: data.productCount,
+        hasAzData: data.hasAzData,
+        hasEuData: data.hasEuData,
+        hasFaoData: data.hasFaoData,
+        hasFpmaData: data.hasFpmaData
+      });
+    }
   });
 
   // Sort by product count
-  return categories.sort((a, b) => b.productCount - a.productCount);
+  return Array.from(categorySlugMap.values()).sort((a, b) => b.productCount - a.productCount);
 }
 
 export default async function CategoriesPage() {
