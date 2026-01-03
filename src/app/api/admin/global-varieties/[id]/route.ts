@@ -7,7 +7,7 @@ interface Params {
   params: { id: string };
 }
 
-// GET: Get single GlobalProduct with full details
+// GET: Get single GlobalProductVariety with full details
 export async function GET(request: NextRequest, { params }: Params) {
   try {
     const session = await getServerSession(authOptions);
@@ -15,37 +15,34 @@ export async function GET(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const product = await prisma.globalProduct.findUnique({
+    const variety = await prisma.globalProductVariety.findUnique({
       where: { id: params.id },
       include: {
-        globalCategory: true,
-        productVarieties: {
-          orderBy: { sortOrder: "asc" },
+        globalProduct: {
+          include: { globalCategory: true }
         },
-        localProducts: {
-          include: { category: true }
+        productTypes: {
+          include: { product: true }
         },
-        euProducts: true,
-        faoProducts: true,
         fpmaCommodities: true,
       },
     });
 
-    if (!product) {
-      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    if (!variety) {
+      return NextResponse.json({ error: "Variety not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ product });
+    return NextResponse.json({ variety });
   } catch (error) {
-    console.error("Error fetching global product:", error);
+    console.error("Error fetching global variety:", error);
     return NextResponse.json(
-      { error: "Failed to fetch product" },
+      { error: "Failed to fetch variety" },
       { status: 500 }
     );
   }
 }
 
-// PATCH: Update GlobalProduct
+// PATCH: Update GlobalProductVariety
 export async function PATCH(request: NextRequest, { params }: Params) {
   try {
     const session = await getServerSession(authOptions);
@@ -58,49 +55,46 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       nameEn,
       nameAz,
       nameRu,
-      globalCategoryId,
       hsCode,
-      faoCode,
-      fpmaCode,
-      eurostatCode,
       image,
-      descriptionAz,
-      descriptionEn,
+      description,
+      globalProductId,
+      sortOrder,
       isActive,
     } = body;
 
-    const product = await prisma.globalProduct.update({
+    const variety = await prisma.globalProductVariety.update({
       where: { id: params.id },
       data: {
         ...(nameEn && { nameEn }),
         ...(nameAz !== undefined && { nameAz }),
         ...(nameRu !== undefined && { nameRu }),
-        ...(globalCategoryId !== undefined && { globalCategoryId }),
         ...(hsCode !== undefined && { hsCode }),
-        ...(faoCode !== undefined && { faoCode }),
-        ...(fpmaCode !== undefined && { fpmaCode }),
-        ...(eurostatCode !== undefined && { eurostatCode }),
         ...(image !== undefined && { image }),
-        ...(descriptionAz !== undefined && { descriptionAz }),
-        ...(descriptionEn !== undefined && { descriptionEn }),
+        ...(description !== undefined && { description }),
+        ...(globalProductId && { globalProductId }),
+        ...(sortOrder !== undefined && { sortOrder }),
         ...(isActive !== undefined && { isActive }),
+        // Mark as manually updated
+        isAutoMatched: false,
+        matchScore: 1.0,
       },
       include: {
-        globalCategory: true,
+        globalProduct: true,
       },
     });
 
-    return NextResponse.json({ product });
+    return NextResponse.json({ variety });
   } catch (error) {
-    console.error("Error updating global product:", error);
+    console.error("Error updating global variety:", error);
     return NextResponse.json(
-      { error: "Failed to update product" },
+      { error: "Failed to update variety" },
       { status: 500 }
     );
   }
 }
 
-// DELETE: Soft delete GlobalProduct
+// DELETE: Soft delete GlobalProductVariety
 export async function DELETE(request: NextRequest, { params }: Params) {
   try {
     const session = await getServerSession(authOptions);
@@ -108,17 +102,18 @@ export async function DELETE(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const product = await prisma.globalProduct.update({
+    const variety = await prisma.globalProductVariety.update({
       where: { id: params.id },
       data: { isActive: false },
     });
 
-    return NextResponse.json({ product, message: "Product deactivated" });
+    return NextResponse.json({ variety, message: "Variety deactivated" });
   } catch (error) {
-    console.error("Error deleting global product:", error);
+    console.error("Error deleting global variety:", error);
     return NextResponse.json(
-      { error: "Failed to delete product" },
+      { error: "Failed to delete variety" },
       { status: 500 }
     );
   }
 }
+

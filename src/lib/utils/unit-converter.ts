@@ -152,3 +152,5 @@ export function convertKgToEuPrice(pricePerKg: number): number {
 
 
 
+
+

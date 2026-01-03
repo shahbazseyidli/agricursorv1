@@ -63,25 +63,70 @@ model Session {
 }
 
 // ============================================
-// GEOGRAPHY
+// GLOBAL GEOGRAPHY - Universal country system
+// ============================================
+
+model GlobalCountry {
+  id          String   @id @default(cuid())
+  iso2        String   @unique // ISO 3166-1 alpha-2: AZ, US, DE
+  iso3        String   @unique // ISO 3166-1 alpha-3: AZE, USA, DEU
+  numericCode String?  @map("numeric_code") // ISO 3166-1 numeric: 031, 840, 276
+  
+  // Names
+  nameEn      String   @map("name_en") // English name
+  nameAz      String?  @map("name_az") // Azerbaijani name
+  nameRu      String?  @map("name_ru") // Russian name
+  
+  // UN M49 Regions
+  region      String   // Asia, Europe, Africa, Americas, Oceania
+  subRegion   String?  @map("sub_region") // Western Asia, Eastern Europe, etc.
+  
+  // Visual
+  flagEmoji   String?  @map("flag_emoji") // 🇦🇿
+  flagUrl     String?  @map("flag_url") // Custom flag image URL
+  
+  // Status
+  isActive    Boolean  @default(true) @map("is_active")
+  isFeatured  Boolean  @default(false) @map("is_featured") // Featured countries (AZ)
+  sortOrder   Int      @default(0) @map("sort_order")
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations to source-specific country tables
+  azCountries    Country[]     // AZ data source countries
+  euCountries    EuCountry[]   // Eurostat countries
+  faoCountries   FaoCountry[]  // FAOSTAT countries
+  fpmaCountries  FpmaCountry[] // FAO FPMA countries
+
+  @@index([region])
+  @@index([subRegion])
+  @@map("global_countries")
+}
+
+// ============================================
+// LOCAL GEOGRAPHY - AZ Data Source
 // ============================================
 
 model Country {
-  id        String   @id @default(cuid())
-  iso2      String   @unique
-  name      String
-  nameEn    String?  @map("name_en")
-  nameRu    String?  @map("name_ru")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  iso2            String   @unique
+  name            String
+  nameEn          String?  @map("name_en")
+  nameRu          String?  @map("name_ru")
+  globalCountryId String?  @map("global_country_id") // Link to GlobalCountry
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  marketTypes MarketType[]
-  markets     Market[]
-  categories  Category[]
-  products    Product[]
-  prices      Price[]
-  aggregates  AzPriceAggregate[]
+  globalCountry GlobalCountry? @relation(fields: [globalCountryId], references: [id])
+  marketTypes   MarketType[]
+  markets       Market[]
+  categories    Category[]
+  products      Product[]
+  prices        Price[]
+  aggregates    AzPriceAggregate[]
 
+  @@index([globalCountryId])
   @@map("countries")
 }
 
@@ -90,18 +135,20 @@ model Country {
 // ============================================
 
 model GlobalCategory {
-  id          String   @id @default(cuid())
-  code        String   @unique // HS2 code: "07", "08", "10"
-  slug        String   @unique // vegetables, fruits, cereals
-  nameEn      String   @map("name_en")
-  nameAz      String?  @map("name_az")
-  nameRu      String?  @map("name_ru")
-  description String?
-  icon        String? // emoji or icon name
-  sortOrder   Int      @default(0) @map("sort_order")
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  code          String   @unique // HS2 code: "07", "08", "10"
+  slug          String   @unique // vegetables, fruits, cereals
+  nameEn        String   @map("name_en")
+  nameAz        String?  @map("name_az")
+  nameRu        String?  @map("name_ru")
+  description   String?
+  descriptionAz String?  @map("description_az")
+  icon          String? // emoji or icon name
+  image         String? // Image URL (manual upload or link)
+  sortOrder     Int      @default(0) @map("sort_order")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   globalProducts  GlobalProduct[]
   localCategories Category[] // Local AZ categories linked to this global
@@ -425,20 +472,31 @@ model GlobalProductVariety {
   id              String @id @default(cuid())
   globalProductId String @map("global_product_id")
 
-  slug   String // base, red, white, imported, organic
-  nameEn String  @map("name_en") // "Red", "White", "Imported"
+  slug   String // base, red, white, imported, organic, long-grain
+  nameEn String  @map("name_en") // "Red", "White", "Imported", "Long Grain"
   nameAz String? @map("name_az") // "Qırmızı", "Ağ", "İdxal"
   nameRu String? @map("name_ru")
+  
+  // Additional info
+  hsCode      String? @map("hs_code") // HS code for this variety
+  description String?
+  image       String? // Image URL
 
   // Source mappings
-  fpmaVarietyCode String? @map("fpma_variety_code") // "070190_2"
+  fpmaVarietyCode String? @map("fpma_variety_code") // "070190_2", "100630_2"
+  
+  // Mapping status for admin
+  isAutoMatched Boolean @default(false) @map("is_auto_matched") // Auto-matched vs manual
+  matchScore    Float?  @map("match_score") // Confidence score for auto-match
 
   isActive  Boolean  @default(true) @map("is_active")
+  sortOrder Int      @default(0) @map("sort_order")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  globalProduct GlobalProduct @relation(fields: [globalProductId], references: [id], onDelete: Cascade)
-  productTypes  ProductType[] // Link to local AZ product types
+  globalProduct   GlobalProduct     @relation(fields: [globalProductId], references: [id], onDelete: Cascade)
+  productTypes    ProductType[]     // Link to local AZ product types
+  fpmaCommodities FpmaCommodity[]   // Link to FPMA commodities
 
   @@unique([globalProductId, slug])
   @@index([fpmaVarietyCode])
@@ -450,18 +508,21 @@ model GlobalProductVariety {
 // ============================================
 
 model EuCountry {
-  id        String   @id @default(cuid())
-  code      String   @unique // DE, FR, IT, ES, PL...
-  nameAz    String?  @map("name_az")
-  nameEn    String   @map("name_en")
-  nameRu    String?  @map("name_ru")
-  region    String?
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  code            String   @unique // DE, FR, IT, ES, PL...
+  nameAz          String?  @map("name_az")
+  nameEn          String   @map("name_en")
+  nameRu          String?  @map("name_ru")
+  region          String?
+  globalCountryId String?  @map("global_country_id") // Link to GlobalCountry
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  prices EuPrice[]
+  globalCountry GlobalCountry? @relation(fields: [globalCountryId], references: [id])
+  prices        EuPrice[]
 
+  @@index([globalCountryId])
   @@map("eu_countries")
 }
 
@@ -596,22 +657,25 @@ model EuDataSync {
 // ============================================
 
 model FaoCountry {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  m49Code   String?  @map("m49_code")
-  iso2      String?
-  iso3      String? // Added for FPMA compatibility
-  nameEn    String   @map("name_en")
-  nameAz    String?  @map("name_az")
-  region    String?
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  code            String   @unique
+  m49Code         String?  @map("m49_code")
+  iso2            String?
+  iso3            String? // Added for FPMA compatibility
+  nameEn          String   @map("name_en")
+  nameAz          String?  @map("name_az")
+  region          String?
+  globalCountryId String?  @map("global_country_id") // Link to GlobalCountry
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  prices FaoPrice[]
+  globalCountry GlobalCountry? @relation(fields: [globalCountryId], references: [id])
+  prices        FaoPrice[]
 
   @@index([iso2])
   @@index([iso3])
+  @@index([globalCountryId])
   @@map("fao_countries")
 }
 
@@ -703,21 +767,24 @@ model GlobalAzAggregate {
 
 // FPMA Countries
 model FpmaCountry {
-  id        String   @id @default(cuid())
-  iso3      String   @unique // AFG, AZE, DEU
-  iso2      String? // AF, AZ, DE
-  nameEn    String   @map("name_en")
-  nameAz    String?  @map("name_az")
-  nameRu    String?  @map("name_ru")
-  region    String?
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  iso3            String   @unique // AFG, AZE, DEU
+  iso2            String? // AF, AZ, DE
+  nameEn          String   @map("name_en")
+  nameAz          String?  @map("name_az")
+  nameRu          String?  @map("name_ru")
+  region          String?
+  globalCountryId String?  @map("global_country_id") // Link to GlobalCountry
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  markets FpmaMarket[]
-  series  FpmaSerie[]
+  globalCountry GlobalCountry? @relation(fields: [globalCountryId], references: [id])
+  markets       FpmaMarket[]
+  series        FpmaSerie[]
 
   @@index([iso2])
+  @@index([globalCountryId])
   @@map("fpma_countries")
 }
 
@@ -742,22 +809,25 @@ model FpmaMarket {
 
 // FPMA Commodities (Stage - original data)
 model FpmaCommodity {
-  id              String         @id @default(cuid())
-  code            String         @unique // 070190_1, 080810_1
-  baseCode        String         @map("base_code") // 070190, 080810
-  nameEn          String         @map("name_en")
-  nameAz          String?        @map("name_az")
-  varietyName     String?        @map("variety_name") // "imported", "red", "white"
-  globalProductId String?        @map("global_product_id")
-  globalProduct   GlobalProduct? @relation(fields: [globalProductId], references: [id])
-  isActive        Boolean        @default(true) @map("is_active")
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id                     String         @id @default(cuid())
+  code                   String         @unique // 070190_1, 080810_1
+  baseCode               String         @map("base_code") // 070190, 080810
+  nameEn                 String         @map("name_en")
+  nameAz                 String?        @map("name_az")
+  varietyName            String?        @map("variety_name") // "imported", "red", "white"
+  globalProductId        String?        @map("global_product_id")
+  globalProductVarietyId String?        @map("global_product_variety_id") // Link to variety
+  globalProduct          GlobalProduct? @relation(fields: [globalProductId], references: [id])
+  globalProductVariety   GlobalProductVariety? @relation(fields: [globalProductVarietyId], references: [id])
+  isActive               Boolean        @default(true) @map("is_active")
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
 
   series FpmaSerie[]
 
   @@index([baseCode])
   @@index([globalProductId])
+  @@index([globalProductVarietyId])
   @@map("fpma_commodities")
 }
 

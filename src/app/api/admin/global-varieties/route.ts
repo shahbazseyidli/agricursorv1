@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
-// GET: List all GlobalProducts with relations
+// GET: List GlobalProductVarieties (optionally filtered by product)
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -12,51 +12,49 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const categoryId = searchParams.get("categoryId");
-    const search = searchParams.get("search");
+    const productId = searchParams.get("productId");
+    const unmapped = searchParams.get("unmapped") === "true";
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "50");
 
     const where: any = { isActive: true };
     
-    if (categoryId) {
-      where.globalCategoryId = categoryId;
+    if (productId) {
+      where.globalProductId = productId;
     }
     
-    if (search) {
-      where.OR = [
-        { nameEn: { contains: search } },
-        { nameAz: { contains: search } },
-        { slug: { contains: search } },
-      ];
+    if (unmapped) {
+      // Varieties that were auto-matched with low confidence
+      where.isAutoMatched = true;
+      where.matchScore = { lt: 0.8 };
     }
 
-    const [products, total] = await Promise.all([
-      prisma.globalProduct.findMany({
+    const [varieties, total] = await Promise.all([
+      prisma.globalProductVariety.findMany({
         where,
         include: {
-          globalCategory: {
+          globalProduct: {
             select: { id: true, slug: true, nameEn: true, nameAz: true }
           },
           _count: {
             select: {
-              productVarieties: true,
-              localProducts: true,
-              euProducts: true,
-              faoProducts: true,
+              productTypes: true,
               fpmaCommodities: true,
             }
           }
         },
-        orderBy: { nameEn: "asc" },
+        orderBy: [
+          { globalProductId: "asc" },
+          { sortOrder: "asc" },
+        ],
         skip: (page - 1) * limit,
         take: limit,
       }),
-      prisma.globalProduct.count({ where }),
+      prisma.globalProductVariety.count({ where }),
     ]);
 
     return NextResponse.json({
-      products,
+      varieties,
       pagination: {
         total,
         page,
@@ -65,15 +63,15 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error fetching global products:", error);
+    console.error("Error fetching global varieties:", error);
     return NextResponse.json(
-      { error: "Failed to fetch products" },
+      { error: "Failed to fetch varieties" },
       { status: 500 }
     );
   }
 }
 
-// POST: Create new GlobalProduct
+// POST: Create new GlobalProductVariety
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -82,36 +80,39 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { slug, nameEn, nameAz, globalCategoryId, hsCode, image } = body;
+    const { globalProductId, slug, nameEn, nameAz, hsCode, image } = body;
 
-    if (!slug || !nameEn) {
+    if (!globalProductId || !slug || !nameEn) {
       return NextResponse.json(
-        { error: "slug and nameEn are required" },
+        { error: "globalProductId, slug and nameEn are required" },
         { status: 400 }
       );
     }
 
-    const product = await prisma.globalProduct.create({
+    const variety = await prisma.globalProductVariety.create({
       data: {
+        globalProductId,
         slug,
         nameEn,
         nameAz,
-        globalCategoryId,
         hsCode,
         image,
+        isAutoMatched: false,
+        matchScore: 1.0,
         isActive: true,
       },
       include: {
-        globalCategory: true,
+        globalProduct: true,
       },
     });
 
-    return NextResponse.json({ product });
+    return NextResponse.json({ variety });
   } catch (error) {
-    console.error("Error creating global product:", error);
+    console.error("Error creating global variety:", error);
     return NextResponse.json(
-      { error: "Failed to create product" },
+      { error: "Failed to create variety" },
       { status: 500 }
     );
   }
 }
+

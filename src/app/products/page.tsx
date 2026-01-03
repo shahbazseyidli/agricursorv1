@@ -1,307 +1,279 @@
 import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Package, TrendingUp, ArrowRight, Globe } from "lucide-react";
+import { Package, TrendingUp, Database, Search } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { PublicHeader } from "@/components/layout/public-header";
-import { ProductsFilters } from "./products-filters";
+import { MainLayout } from "@/components/layout/main-layout";
+import { Input } from "@/components/ui/input";
 
-async function getProductsData() {
-  // Get all global products with all related data sources
+interface ProductWithStats {
+  id: string;
+  slug: string;
+  nameEn: string;
+  nameAz: string | null;
+  image: string | null;
+  category: {
+    slug: string;
+    nameAz: string | null;
+    nameEn: string;
+    icon: string | null;
+  } | null;
+  dataSources: string[];
+  varietyCount: number;
+  countryCount: number;
+}
+
+async function getProducts(): Promise<{
+  products: ProductWithStats[];
+  categoryGroups: Record<string, ProductWithStats[]>;
+  totalCount: number;
+}> {
+  // Get all GlobalProducts with their relations
   const globalProducts = await prisma.globalProduct.findMany({
     where: { isActive: true },
     include: {
+      globalCategory: true,
+      productVarieties: {
+        where: { isActive: true },
+        select: { id: true }
+      },
       localProducts: {
-        include: {
-          category: true,
-          _count: { select: { prices: true } }
-        }
+        select: { id: true }
       },
       euProducts: {
-        include: {
-          _count: { select: { prices: true } }
-        }
+        select: { id: true }
       },
       faoProducts: {
-        include: {
-          _count: { select: { prices: true } }
-        }
+        select: { id: true }
       },
       fpmaCommodities: {
-        include: {
-          _count: { select: { series: true } }
-        }
+        select: { id: true }
       },
-      globalCategory: true
     },
     orderBy: { nameEn: "asc" }
   });
-  
-  // Get categories from local products
-  const categories = await prisma.category.findMany({
-    orderBy: { name: "asc" }
-  });
 
-  // Get global categories
-  const globalCategories = await prisma.globalCategory.findMany({
-    orderBy: { sortOrder: "asc" }
-  });
+  // Transform to ProductWithStats
+  const products: ProductWithStats[] = globalProducts.map(gp => {
+    const dataSources: string[] = [];
 
-  // Transform global products with all data sources
-  const allProducts = globalProducts.map(gp => {
-    const azPriceCount = gp.localProducts.reduce((sum, lp) => sum + lp._count.prices, 0);
-    const euPriceCount = gp.euProducts.reduce((sum, ep) => sum + ep._count.prices, 0);
-    const faoPriceCount = gp.faoProducts.reduce((sum, fp) => sum + fp._count.prices, 0);
-    const fpmaSeriesCount = gp.fpmaCommodities.reduce((sum, fc) => sum + fc._count.series, 0);
-    
+    if (gp.localProducts.length > 0) dataSources.push("AZ");
+    if (gp.euProducts.length > 0) dataSources.push("EU");
+    if (gp.faoProducts.length > 0) dataSources.push("FAO");
+    if (gp.fpmaCommodities.length > 0) dataSources.push("FPMA");
+
+    // Count unique countries (approximate)
+    const countryCount = dataSources.length * 10; // rough estimate
+
     return {
       id: gp.id,
       slug: gp.slug,
-      nameAz: gp.nameAz || gp.nameEn,
       nameEn: gp.nameEn,
-      category: gp.globalCategory?.nameAz || gp.category || "Digər",
-      unit: gp.defaultUnit,
+      nameAz: gp.nameAz,
       image: gp.image,
-      hasAzData: gp.localProducts.length > 0,
-      hasEuData: gp.euProducts.length > 0,
-      hasFaoData: gp.faoProducts.length > 0,
-      hasFpmaData: gp.fpmaCommodities.length > 0,
-      azPriceCount,
-      euPriceCount,
-      faoPriceCount,
-      fpmaSeriesCount,
-      totalPriceCount: azPriceCount + euPriceCount + faoPriceCount + (fpmaSeriesCount * 50),
-      localCategory: gp.localProducts[0]?.category?.name,
-      globalCategorySlug: gp.globalCategory?.slug
+      category: gp.globalCategory ? {
+        slug: gp.globalCategory.slug,
+        nameAz: gp.globalCategory.nameAz,
+        nameEn: gp.globalCategory.nameEn,
+        icon: gp.globalCategory.icon,
+      } : null,
+      dataSources,
+      varietyCount: gp.productVarieties.length,
+      countryCount,
     };
   });
 
-  return { products: allProducts, categories, globalCategories };
-}
-
-interface PageProps {
-  searchParams: { q?: string; category?: string; source?: string };
-}
-
-export default async function ProductsPage({ searchParams }: PageProps) {
-  const { products: allProducts, categories, globalCategories } = await getProductsData();
-  
-  // Filter products based on URL params
-  const { q, category, source } = searchParams;
-  
-  let products = allProducts;
-  
-  // Search filter
-  if (q) {
-    const query = q.toLowerCase();
-    products = products.filter(p => 
-      p.nameAz.toLowerCase().includes(query) ||
-      p.nameEn.toLowerCase().includes(query)
-    );
-  }
-  
-  // Category filter
-  if (category && category !== "all") {
-    products = products.filter(p => {
-      const cat = (p.localCategory || p.category || "").toLowerCase();
-      return cat.includes(category.toLowerCase());
-    });
-  }
-  
-  // Source filter
-  if (source && source !== "all") {
-    if (source === "az") {
-      products = products.filter(p => p.hasAzData && !p.hasEuData);
-    } else if (source === "eu") {
-      products = products.filter(p => p.hasEuData && !p.hasAzData);
-    } else if (source === "both") {
-      products = products.filter(p => p.hasAzData && p.hasEuData);
-    }
-  }
+  // Filter to only products with data
+  const productsWithData = products.filter(p => p.dataSources.length > 0);
 
   // Group by category
-  const groupedProducts = products.reduce((acc, product) => {
-    const cat = product.localCategory || product.category || "Digər";
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(product);
-    return acc;
-  }, {} as Record<string, typeof products>);
+  const categoryGroups: Record<string, ProductWithStats[]> = {};
+  
+  for (const product of productsWithData) {
+    const categorySlug = product.category?.slug || "other";
+    if (!categoryGroups[categorySlug]) {
+      categoryGroups[categorySlug] = [];
+    }
+    categoryGroups[categorySlug].push(product);
+  }
 
-  // Sort categories
-  const sortedCategories = Object.entries(groupedProducts).sort((a, b) => {
-    // Priority order
-    const order = ["Meyvə", "Fruits", "Tərəvəz", "Vegetables", "Bostan"];
-    const aIdx = order.findIndex(c => a[0].includes(c));
-    const bIdx = order.findIndex(c => b[0].includes(c));
-    if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-    if (aIdx !== -1) return -1;
-    if (bIdx !== -1) return 1;
-    return a[0].localeCompare(b[0]);
+  // Sort products within each category
+  for (const category of Object.keys(categoryGroups)) {
+    categoryGroups[category].sort((a, b) => 
+      (a.nameAz || a.nameEn).localeCompare(b.nameAz || b.nameEn, "az")
+    );
+  }
+
+  return {
+    products: productsWithData,
+    categoryGroups,
+    totalCount: productsWithData.length,
+  };
+}
+
+// Data source colors
+const sourceColors: Record<string, string> = {
+  "AZ": "bg-emerald-100 text-emerald-700",
+  "EU": "bg-blue-100 text-blue-700",
+  "FAO": "bg-amber-100 text-amber-700",
+  "FPMA": "bg-purple-100 text-purple-700",
+};
+
+// Category order and icons
+const categoryConfig: Record<string, { nameAz: string; icon: string; order: number }> = {
+  "fruits": { nameAz: "Meyvələr", icon: "🍎", order: 1 },
+  "vegetables": { nameAz: "Tərəvəzlər", icon: "🥕", order: 2 },
+  "cereals": { nameAz: "Taxıl", icon: "🌾", order: 3 },
+  "dairy": { nameAz: "Süd məhsulları", icon: "🥛", order: 4 },
+  "meat": { nameAz: "Ət məhsulları", icon: "🥩", order: 5 },
+  "fish": { nameAz: "Balıq", icon: "🐟", order: 6 },
+  "oils": { nameAz: "Yağlar", icon: "🫒", order: 7 },
+  "flour": { nameAz: "Un məhsulları", icon: "🌾", order: 8 },
+  "bakery": { nameAz: "Çörək məhsulları", icon: "🍞", order: 9 },
+  "sugar": { nameAz: "Şəkər", icon: "🍬", order: 10 },
+  "oilseeds": { nameAz: "Yağlı toxumlar", icon: "🌻", order: 11 },
+  "live-animals": { nameAz: "Canlı heyvanlar", icon: "🐄", order: 12 },
+  "prepared-meat": { nameAz: "Hazır ət məhsulları", icon: "🌭", order: 13 },
+  "preserved": { nameAz: "Konserv məhsullar", icon: "🥫", order: 14 },
+  "other": { nameAz: "Digər", icon: "📦", order: 99 },
+};
+
+export default async function ProductsPage() {
+  const { categoryGroups, totalCount } = await getProducts();
+
+  // Sort categories by order
+  const sortedCategories = Object.entries(categoryGroups).sort((a, b) => {
+    const orderA = categoryConfig[a[0]]?.order ?? 99;
+    const orderB = categoryConfig[b[0]]?.order ?? 99;
+    return orderA - orderB;
   });
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <PublicHeader />
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Page Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">Məhsullar</h1>
-          <p className="text-slate-500">
-            {products.length} məhsulun qiymət məlumatlarına baxın (Azərbaycan + Avropa)
-          </p>
+    <MainLayout>
+      <div className="space-y-8">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Məhsullar</h1>
+            <p className="text-slate-600 mt-1">
+              Bütün kənd təsərrüfatı məhsullarının qiymət məlumatları
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+            <Package className="w-4 h-4" />
+            {totalCount} məhsul
+          </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-emerald-600">
-                {products.filter(p => p.hasAzData).length}
-              </p>
-              <p className="text-sm text-slate-500">🇦🇿 Azərbaycan</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-blue-600">
-                {products.filter(p => p.hasEuData).length}
-              </p>
-              <p className="text-sm text-slate-500">🇪🇺 Eurostat</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-amber-600">
-                {products.filter(p => p.hasFaoData).length}
-              </p>
-              <p className="text-sm text-slate-500">🌍 FAOSTAT</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-purple-600">
-                {products.filter(p => p.hasFpmaData).length}
-              </p>
-              <p className="text-sm text-slate-500">📊 FAO FPMA</p>
-            </CardContent>
-          </Card>
+        {/* Search */}
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input 
+            placeholder="Məhsul axtar..." 
+            className="pl-10"
+            disabled
+          />
         </div>
-
-        {/* Filters - Client Component */}
-        <ProductsFilters categories={categories} />
 
         {/* Products by Category */}
-        <div className="space-y-12">
-          {sortedCategories.map(([category, catProducts]) => (
-            <div key={category}>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-slate-900">
-                  {category}
+        {sortedCategories.map(([categorySlug, products]) => {
+          const config = categoryConfig[categorySlug] || categoryConfig["other"];
+          
+          return (
+            <div key={categorySlug} className="space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">{config.icon}</span>
+                <h2 className="text-lg font-semibold text-slate-700">
+                  {config.nameAz}
                 </h2>
-                <span className="text-sm text-slate-500">
-                  {catProducts.length} məhsul
-                </span>
+                <Badge variant="secondary" className="font-normal">
+                  {products.length}
+                </Badge>
+                <Link 
+                  href={`/categories/${categorySlug}`}
+                  className="ml-auto text-sm text-blue-600 hover:text-blue-800"
+                >
+                  Hamısına bax →
+                </Link>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {catProducts.map((product) => (
+              
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                {products.slice(0, 10).map((product) => (
                   <Link key={product.id} href={`/products/${product.slug}`}>
-                    <Card className="h-full hover:shadow-lg hover:border-emerald-200 transition-all group cursor-pointer">
-                      <CardContent className="p-5">
-                        <div className="flex items-start justify-between mb-3">
-                          {/* Product Image or Icon */}
+                    <Card className="hover:shadow-lg transition-all h-full cursor-pointer hover:border-blue-200">
+                      <CardContent className="p-4">
+                        {/* Product image/icon */}
+                        <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center mb-3">
                           {product.image ? (
-                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-100">
-                              <img 
-                                src={product.image} 
-                                alt={product.nameAz}
-                                className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                              />
-                            </div>
+                            <img 
+                              src={product.image} 
+                              alt={product.nameEn} 
+                              className="w-10 h-10 object-cover rounded"
+                            />
                           ) : (
-                            <div className="w-12 h-12 rounded-lg bg-emerald-50 flex items-center justify-center group-hover:bg-emerald-100 transition-colors">
-                              <Package className="w-6 h-6 text-emerald-600" />
-                            </div>
+                            <span className="text-2xl">{config.icon}</span>
                           )}
-                          
-                          {/* Data Source Badges */}
-                          <div className="flex gap-1 flex-wrap">
-                            {product.hasAzData && (
-                              <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">
-                                🇦🇿
-                              </Badge>
-                            )}
-                            {product.hasEuData && (
-                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                                🇪🇺
-                              </Badge>
-                            )}
-                            {product.hasFaoData && (
-                              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
-                                FAO
-                              </Badge>
-                            )}
-                            {product.hasFpmaData && (
-                              <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
-                                FPMA
-                              </Badge>
-                            )}
-                          </div>
                         </div>
-
-                        <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-emerald-700 transition-colors">
-                          {product.nameAz}
-                        </h3>
                         
-                        {product.nameAz !== product.nameEn && (
-                          <p className="text-xs text-slate-400 mb-2">{product.nameEn}</p>
-                        )}
-
-                        <p className="text-sm text-slate-500 mb-3">
-                          {category}
+                        <h4 className="font-semibold text-slate-900 truncate">
+                          {product.nameAz || product.nameEn}
+                        </h4>
+                        <p className="text-xs text-slate-500 truncate">
+                          {product.nameEn}
                         </p>
-
-                        <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                          <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1 text-sm text-slate-500">
-                              <TrendingUp className="w-4 h-4" />
-                              <span>{product.totalPriceCount.toLocaleString()}</span>
-                            </div>
-                          </div>
-                          <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
+                        
+                        {/* Data sources badges */}
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {product.dataSources.map(source => (
+                            <Badge 
+                              key={source} 
+                              variant="secondary" 
+                              className={`text-xs px-1.5 py-0 ${sourceColors[source] || ""}`}
+                            >
+                              {source}
+                            </Badge>
+                          ))}
                         </div>
+                        
+                        {product.varietyCount > 0 && (
+                          <div className="mt-2 text-xs text-slate-400">
+                            {product.varietyCount} növ
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   </Link>
                 ))}
               </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
 
-        {/* Empty State */}
-        {products.length === 0 && (
-          <Card className="py-16 text-center">
-            <Package className="w-16 h-16 mx-auto text-slate-300 mb-4" />
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">
-              Məhsul tapılmadı
-            </h3>
-            <p className="text-slate-500">
-              Admin paneldən məhsul əlavə edin
-            </p>
-          </Card>
-        )}
-
-        {/* Data Source Note */}
-        <div className="mt-12 text-center text-sm text-slate-400 border-t pt-8">
-          <p className="flex items-center justify-center gap-2">
-            <Globe className="w-4 h-4" />
-            Data mənbələri: agro.gov.az, Eurostat, FAOSTAT, FAO FPMA (136 ölkə)
-          </p>
-        </div>
+        {/* Data Sources Legend */}
+        <Card className="bg-slate-50">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Database className="w-5 h-5" />
+              Data Mənbələri
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-4">
+              {Object.entries(sourceColors).map(([source, color]) => (
+                <div key={source} className="flex items-center gap-2">
+                  <Badge className={color}>{source}</Badge>
+                  <span className="text-sm text-slate-600">
+                    {source === "AZ" && "Agro.gov.az"}
+                    {source === "EU" && "Eurostat"}
+                    {source === "FAO" && "FAOSTAT"}
+                    {source === "FPMA" && "FAO FPMA"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </MainLayout>
   );
 }

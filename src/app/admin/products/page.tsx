@@ -2,1224 +2,304 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import {
-  Package,
-  Plus,
-  Trash2,
-  Edit,
-  RefreshCw,
-  AlertTriangle,
-  Tag,
-  FolderTree,
+import { 
+  Package, 
+  Search, 
+  Edit2, 
+  Image as ImageIcon,
+  ExternalLink,
+  ChevronRight,
+  Layers
 } from "lucide-react";
 
-interface Country {
+interface GlobalProduct {
   id: string;
-  iso2: string;
-  name: string;
-}
-
-interface Category {
-  id: string;
-  name: string;
-  nameEn: string | null;
-  nameRu: string | null;
   slug: string;
-  aliases: string | null;
-  country: Country;
-  _count: { products: number };
-}
-
-interface ProductType {
-  id: string;
-  name: string;
-  nameEn: string | null;
-  nameRu: string | null;
-  aliases: string | null;
-  product: { id: string; name: string; slug: string };
-  _count: { prices: number };
-}
-
-interface Product {
-  id: string;
-  name: string;
-  nameEn: string | null;
-  nameRu: string | null;
-  slug: string;
-  unit: string;
-  aliases: string | null;
-  faoCode: string | null;
+  nameEn: string;
+  nameAz: string | null;
+  image: string | null;
   hsCode: string | null;
-  country: Country;
-  category: Category;
-  productTypes: ProductType[];
-  _count: { prices: number };
+  globalCategory: {
+    id: string;
+    slug: string;
+    nameEn: string;
+    nameAz: string | null;
+  } | null;
+  _count: {
+    productVarieties: number;
+    localProducts: number;
+    euProducts: number;
+    faoProducts: number;
+    fpmaCommodities: number;
+  };
 }
 
-export default function ProductsManagementPage() {
-  const [activeTab, setActiveTab] = useState("products");
-  const [countries, setCountries] = useState<Country[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [productTypes, setProductTypes] = useState<ProductType[]>([]);
+interface GlobalCategory {
+  id: string;
+  slug: string;
+  nameEn: string;
+  nameAz: string | null;
+  _count: {
+    globalProducts: number;
+  };
+}
+
+export default function AdminProductsPage() {
+  const [products, setProducts] = useState<GlobalProduct[]>([]);
+  const [categories, setCategories] = useState<GlobalCategory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCountry, setSelectedCountry] = useState<string>("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("");
-  const [selectedProduct, setSelectedProduct] = useState<string>("");
-
-  // Form states
-  const [showCategoryForm, setShowCategoryForm] = useState(false);
-  const [showProductForm, setShowProductForm] = useState(false);
-  const [showTypeForm, setShowTypeForm] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [editingType, setEditingType] = useState<ProductType | null>(null);
-
-  const [categoryForm, setCategoryForm] = useState({
-    name: "",
-    nameEn: "",
-    nameRu: "",
-    slug: "",
-    aliases: "",
-    countryId: "",
-  });
-
-  const [productForm, setProductForm] = useState({
-    name: "",
-    nameEn: "",
-    nameRu: "",
-    slug: "",
-    unit: "kg",
-    aliases: "",
-    categoryId: "",
-    countryId: "",
-    faoCode: "",
-    hsCode: "",
-  });
-
-  const [typeForm, setTypeForm] = useState({
-    name: "",
-    nameEn: "",
-    nameRu: "",
-    aliases: "",
-    productId: "",
-  });
-
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<GlobalProduct | null>(null);
 
   useEffect(() => {
-    fetchCountries();
+    fetchCategories();
   }, []);
 
   useEffect(() => {
-    if (selectedCountry) {
-      fetchCategories();
-      fetchProducts();
-    }
-  }, [selectedCountry, selectedCategory]);
-
-  useEffect(() => {
-    if (selectedProduct) {
-      fetchProductTypes();
-    }
-  }, [selectedProduct]);
-
-  async function fetchCountries() {
-    try {
-      const res = await fetch("/api/admin/countries");
-      const data = await res.json();
-      if (data.success) {
-        setCountries(data.data);
-        if (data.data.length > 0) {
-          setSelectedCountry(data.data[0].id);
-        }
-      }
-    } catch (err) {
-      console.error("Error fetching countries:", err);
-    } finally {
-      setLoading(false);
-    }
-  }
+    fetchProducts();
+  }, [selectedCategory, search]);
 
   async function fetchCategories() {
     try {
-      const res = await fetch(
-        `/api/admin/categories?countryId=${selectedCountry}`
-      );
+      const res = await fetch("/api/admin/global-categories");
       const data = await res.json();
-      if (data.success) {
-        setCategories(data.data);
+      if (data.categories) {
+        setCategories(data.categories);
       }
-    } catch (err) {
-      console.error("Error fetching categories:", err);
+    } catch (error) {
+      console.error("Error fetching categories:", error);
     }
   }
 
   async function fetchProducts() {
     try {
-      let url = `/api/admin/products?countryId=${selectedCountry}`;
-      if (selectedCategory) url += `&categoryId=${selectedCategory}`;
-      const res = await fetch(url);
+      setLoading(true);
+      const params = new URLSearchParams();
+      if (selectedCategory) params.set("categoryId", selectedCategory);
+      if (search) params.set("search", search);
+      
+      const res = await fetch(`/api/admin/global-products?${params}`);
       const data = await res.json();
-      if (data.success) {
-        setProducts(data.data);
+      if (data.products) {
+        setProducts(data.products);
       }
-    } catch (err) {
-      console.error("Error fetching products:", err);
-    }
-  }
-
-  async function fetchProductTypes() {
-    try {
-      const res = await fetch(
-        `/api/admin/product-types?productId=${selectedProduct}`
-      );
-      const data = await res.json();
-      if (data.success) {
-        setProductTypes(data.data);
-      }
-    } catch (err) {
-      console.error("Error fetching product types:", err);
-    }
-  }
-
-  // Category handlers
-  function openCategoryForm(category?: Category) {
-    setEditingCategory(category || null);
-    setCategoryForm({
-      name: category?.name || "",
-      nameEn: category?.nameEn || "",
-      nameRu: category?.nameRu || "",
-      slug: category?.slug || "",
-      aliases: category?.aliases || "",
-      countryId: selectedCountry,
-    });
-    setShowCategoryForm(true);
-    setError("");
-  }
-
-  async function handleCategorySubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setError("");
-    try {
-      const url = editingCategory
-        ? `/api/admin/categories/${editingCategory.id}`
-        : "/api/admin/categories";
-      const res = await fetch(url, {
-        method: editingCategory ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(categoryForm),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setShowCategoryForm(false);
-        fetchCategories();
-      } else {
-        setError(data.message);
-      }
-    } catch (err) {
-      setError("Xəta baş verdi");
+    } catch (error) {
+      console.error("Error fetching products:", error);
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   }
 
-  async function handleCategoryDelete(id: string) {
+  async function updateProductImage(productId: string, imageUrl: string) {
     try {
-      const res = await fetch(`/api/admin/categories/${id}`, {
-        method: "DELETE",
-      });
-      const data = await res.json();
-      if (data.success) {
-        fetchCategories();
-      } else {
-        alert(data.message);
-      }
-    } catch (err) {
-      console.error("Error deleting category:", err);
-    }
-  }
-
-  // Product handlers
-  function openProductForm(product?: Product) {
-    setEditingProduct(product || null);
-    setProductForm({
-      name: product?.name || "",
-      nameEn: product?.nameEn || "",
-      nameRu: product?.nameRu || "",
-      slug: product?.slug || "",
-      unit: product?.unit || "kg",
-      aliases: product?.aliases || "",
-      categoryId: product?.category?.id || "",
-      countryId: selectedCountry,
-      faoCode: product?.faoCode || "",
-      hsCode: product?.hsCode || "",
-    });
-    setShowProductForm(true);
-    setError("");
-  }
-
-  async function handleProductSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setError("");
-    try {
-      const url = editingProduct
-        ? `/api/admin/products/${editingProduct.id}`
-        : "/api/admin/products";
-      const res = await fetch(url, {
-        method: editingProduct ? "PUT" : "POST",
+      const res = await fetch(`/api/admin/global-products/${productId}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(productForm),
+        body: JSON.stringify({ image: imageUrl }),
       });
-      const data = await res.json();
-      if (data.success) {
-        setShowProductForm(false);
+      
+      if (res.ok) {
         fetchProducts();
-      } else {
-        setError(data.message);
+        setSelectedProduct(null);
       }
-    } catch (err) {
-      setError("Xəta baş verdi");
-    } finally {
-      setSaving(false);
+    } catch (error) {
+      console.error("Error updating product:", error);
     }
-  }
-
-  async function handleProductDelete(id: string) {
-    try {
-      const res = await fetch(`/api/admin/products/${id}`, {
-        method: "DELETE",
-      });
-      const data = await res.json();
-      if (data.success) {
-        fetchProducts();
-      }
-    } catch (err) {
-      console.error("Error deleting product:", err);
-    }
-  }
-
-  async function handleClearAllProducts() {
-    try {
-      const res = await fetch(
-        `/api/admin/products?countryId=${selectedCountry}`,
-        { method: "DELETE" }
-      );
-      const data = await res.json();
-      if (data.success) {
-        fetchProducts();
-        fetchCategories();
-      }
-    } catch (err) {
-      console.error("Error clearing products:", err);
-    }
-  }
-
-  // Product Type handlers
-  function openTypeForm(type?: ProductType) {
-    setEditingType(type || null);
-    setTypeForm({
-      name: type?.name || "",
-      nameEn: type?.nameEn || "",
-      nameRu: type?.nameRu || "",
-      aliases: type?.aliases || "",
-      productId: type?.product?.id || selectedProduct,
-    });
-    setShowTypeForm(true);
-    setError("");
-  }
-
-  async function handleTypeSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setError("");
-    try {
-      const url = editingType
-        ? `/api/admin/product-types/${editingType.id}`
-        : "/api/admin/product-types";
-      const res = await fetch(url, {
-        method: editingType ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(typeForm),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setShowTypeForm(false);
-        fetchProductTypes();
-        fetchProducts();
-      } else {
-        setError(data.message);
-      }
-    } catch (err) {
-      setError("Xəta baş verdi");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleTypeDelete(id: string) {
-    try {
-      const res = await fetch(`/api/admin/product-types/${id}`, {
-        method: "DELETE",
-      });
-      const data = await res.json();
-      if (data.success) {
-        fetchProductTypes();
-        fetchProducts();
-      }
-    } catch (err) {
-      console.error("Error deleting product type:", err);
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <RefreshCw className="w-8 h-8 animate-spin text-emerald-600" />
-      </div>
-    );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Məhsullar</h1>
-          <p className="text-slate-500 mt-1">
-            Məhsulları, kateqoriyaları və növləri idarə edin
-          </p>
+    <div className="min-h-screen bg-slate-50 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">
+              Global Məhsullar
+            </h1>
+            <p className="text-slate-600">
+              Məhsulları redaktə et, şəkil əlavə et, əlaqələndirmələri idarə et
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="text-lg px-3 py-1">
+              {products.length} məhsul
+            </Badge>
+          </div>
         </div>
-      </div>
 
-      {/* Country Filter */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex gap-4">
-            <div className="w-48">
-              <Label className="text-sm text-slate-600">Ölkə</Label>
-              <Select
-                value={selectedCountry}
-                onValueChange={setSelectedCountry}
+        {/* Categories filter */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={selectedCategory === null ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedCategory(null)}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Ölkə seçin" />
-                </SelectTrigger>
-                <SelectContent>
-                  {countries.map((country) => (
-                    <SelectItem key={country.id} value={country.id}>
-                      {country.name} ({country.iso2})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="products" className="flex items-center gap-2">
-            <Package className="w-4 h-4" />
-            Məhsullar ({products.length})
-          </TabsTrigger>
-          <TabsTrigger value="categories" className="flex items-center gap-2">
-            <FolderTree className="w-4 h-4" />
-            Kateqoriyalar ({categories.length})
-          </TabsTrigger>
-          <TabsTrigger value="types" className="flex items-center gap-2">
-            <Tag className="w-4 h-4" />
-            Məhsul növləri
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Products Tab */}
-        <TabsContent value="products" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex gap-4">
-              <Select
-                value={selectedCategory || "all"}
-                onValueChange={(v) => setSelectedCategory(v === "all" ? "" : v)}
-              >
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Kateqoriya" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Hamısı</SelectItem>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex gap-2">
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm">
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Hamısını sil
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle className="flex items-center gap-2">
-                      <AlertTriangle className="w-5 h-5 text-red-500" />
-                      Əminsiniz?
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Bütün məhsullar, növlər və qiymətlər silinəcək.
-                      <br />
-                      <strong className="text-red-600">
-                        {products.length} məhsul silinəcək
-                      </strong>
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Ləğv et</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleClearAllProducts}
-                      className="bg-red-600 hover:bg-red-700"
-                    >
-                      Bəli, hamısını sil
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-              <Button onClick={() => openProductForm()}>
-                <Plus className="w-4 h-4 mr-2" />
-                Yeni məhsul
+                Hamısı
               </Button>
+              {categories.map((cat) => (
+                <Button
+                  key={cat.id}
+                  variant={selectedCategory === cat.id ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedCategory(cat.id)}
+                >
+                  {cat.nameAz || cat.nameEn}
+                  <Badge variant="secondary" className="ml-2">
+                    {cat._count.globalProducts}
+                  </Badge>
+                </Button>
+              ))}
             </div>
-          </div>
+          </CardContent>
+        </Card>
 
-          {showProductForm && (
-            <Card className="border-emerald-200 bg-emerald-50/30">
-              <CardHeader>
-                <CardTitle>
-                  {editingProduct ? "Məhsulu redaktə et" : "Yeni məhsul"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleProductSubmit} className="space-y-4">
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <Label>Ad (AZ) *</Label>
-                      <Input
-                        value={productForm.name}
-                        onChange={(e) =>
-                          setProductForm({
-                            ...productForm,
-                            name: e.target.value,
-                          })
-                        }
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Label>Slug (EN) *</Label>
-                      <Input
-                        value={productForm.slug}
-                        onChange={(e) =>
-                          setProductForm({
-                            ...productForm,
-                            slug: e.target.value
-                              .toLowerCase()
-                              .replace(/\s+/g, "-"),
-                          })
-                        }
-                        required
-                        disabled={!!editingProduct}
-                      />
-                    </div>
-                    <div>
-                      <Label>Kateqoriya *</Label>
-                      <Select
-                        value={productForm.categoryId}
-                        onValueChange={(v) =>
-                          setProductForm({ ...productForm, categoryId: v })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seçin" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories.map((cat) => (
-                            <SelectItem key={cat.id} value={cat.id}>
-                              {cat.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Ad (EN)</Label>
-                      <Input
-                        value={productForm.nameEn}
-                        onChange={(e) =>
-                          setProductForm({
-                            ...productForm,
-                            nameEn: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <Label>Ad (RU)</Label>
-                      <Input
-                        value={productForm.nameRu}
-                        onChange={(e) =>
-                          setProductForm({
-                            ...productForm,
-                            nameRu: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <Label>Vahid</Label>
-                      <Input
-                        value={productForm.unit}
-                        onChange={(e) =>
-                          setProductForm({
-                            ...productForm,
-                            unit: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <Label>FAO Kodu</Label>
-                      <Input
-                        value={productForm.faoCode}
-                        onChange={(e) =>
-                          setProductForm({
-                            ...productForm,
-                            faoCode: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <Label>HS Kodu</Label>
-                      <Input
-                        value={productForm.hsCode}
-                        onChange={(e) =>
-                          setProductForm({
-                            ...productForm,
-                            hsCode: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <Label>Aliaslar</Label>
-                      <Input
-                        value={productForm.aliases}
-                        onChange={(e) =>
-                          setProductForm({
-                            ...productForm,
-                            aliases: e.target.value,
-                          })
-                        }
-                        placeholder="alias1, alias2"
-                      />
-                    </div>
-                  </div>
-                  {error && (
-                    <p className="text-sm text-red-600 bg-red-50 p-2 rounded">
-                      {error}
-                    </p>
-                  )}
-                  <div className="flex gap-2">
-                    <Button type="submit" disabled={saving}>
-                      {saving ? "Saxlanır..." : "Saxla"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setShowProductForm(false)}
-                    >
-                      Ləğv et
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          )}
+        {/* Search */}
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input
+            placeholder="Məhsul axtar..."
+            className="pl-10"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
 
-          <Card>
-            <CardContent className="p-0">
-              <table className="w-full">
-                <thead className="bg-slate-50 border-b">
-                  <tr>
-                    <th className="text-left p-4 font-medium text-slate-600">
-                      Məhsul
-                    </th>
-                    <th className="text-left p-4 font-medium text-slate-600">
-                      Kateqoriya
-                    </th>
-                    <th className="text-left p-4 font-medium text-slate-600">
-                      Növlər
-                    </th>
-                    <th className="text-left p-4 font-medium text-slate-600">
-                      Qiymətlər
-                    </th>
-                    <th className="text-right p-4 font-medium text-slate-600">
-                      Əməliyyatlar
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {products.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        className="text-center py-12 text-slate-500"
-                      >
-                        <Package className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                        <p>Məhsul tapılmadı</p>
-                      </td>
-                    </tr>
-                  ) : (
-                    products.map((product) => (
-                      <tr
-                        key={product.id}
-                        className="border-b hover:bg-slate-50"
-                      >
-                        <td className="p-4">
-                          <div>
-                            <p className="font-medium text-slate-900">
-                              {product.name}
-                            </p>
-                            <p className="text-sm text-slate-500">
-                              /{product.slug}
-                            </p>
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          <span className="px-2 py-1 bg-violet-100 text-violet-700 rounded text-sm">
-                            {product.category.name}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          {product.productTypes.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {product.productTypes.map((pt) => (
-                                <span
-                                  key={pt.id}
-                                  className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs"
-                                >
-                                  {pt.name}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-slate-400">-</span>
-                          )}
-                        </td>
-                        <td className="p-4">
-                          {product._count.prices.toLocaleString()}
-                        </td>
-                        <td className="p-4 text-right">
-                          <div className="flex gap-2 justify-end">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openProductForm(product)}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button size="sm" variant="destructive">
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>
-                                    Məhsulu sil?
-                                  </AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    "{product.name}" məhsulu və ona bağlı
-                                    qiymətlər silinəcək.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Ləğv et</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() =>
-                                      handleProductDelete(product.id)
-                                    }
-                                    className="bg-red-600 hover:bg-red-700"
-                                  >
-                                    Sil
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Categories Tab */}
-        <TabsContent value="categories" className="space-y-4">
-          <div className="flex justify-end">
-            <Button onClick={() => openCategoryForm()}>
-              <Plus className="w-4 h-4 mr-2" />
-              Yeni kateqoriya
-            </Button>
-          </div>
-
-          {showCategoryForm && (
-            <Card className="border-emerald-200 bg-emerald-50/30">
-              <CardHeader>
-                <CardTitle>
-                  {editingCategory
-                    ? "Kateqoriyanı redaktə et"
-                    : "Yeni kateqoriya"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleCategorySubmit} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Ad (AZ) *</Label>
-                      <Input
-                        value={categoryForm.name}
-                        onChange={(e) =>
-                          setCategoryForm({
-                            ...categoryForm,
-                            name: e.target.value,
-                          })
-                        }
-                        required
+        {/* Products Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {products.map((product) => (
+            <Card 
+              key={product.id} 
+              className={`cursor-pointer hover:shadow-lg transition-all ${
+                selectedProduct?.id === product.id ? "ring-2 ring-blue-500" : ""
+              }`}
+              onClick={() => setSelectedProduct(product)}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-start gap-4">
+                  {/* Image */}
+                  <div className="w-16 h-16 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 relative group">
+                    {product.image ? (
+                      <img 
+                        src={product.image} 
+                        alt={product.nameEn}
+                        className="w-14 h-14 object-cover rounded"
                       />
-                    </div>
-                    <div>
-                      <Label>Slug *</Label>
-                      <Input
-                        value={categoryForm.slug}
-                        onChange={(e) =>
-                          setCategoryForm({
-                            ...categoryForm,
-                            slug: e.target.value
-                              .toLowerCase()
-                              .replace(/\s+/g, "-"),
-                          })
-                        }
-                        required
-                        disabled={!!editingCategory}
-                      />
-                    </div>
-                    <div>
-                      <Label>Ad (EN)</Label>
-                      <Input
-                        value={categoryForm.nameEn}
-                        onChange={(e) =>
-                          setCategoryForm({
-                            ...categoryForm,
-                            nameEn: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <Label>Ad (RU)</Label>
-                      <Input
-                        value={categoryForm.nameRu}
-                        onChange={(e) =>
-                          setCategoryForm({
-                            ...categoryForm,
-                            nameRu: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <Label>Aliaslar</Label>
-                      <Input
-                        value={categoryForm.aliases}
-                        onChange={(e) =>
-                          setCategoryForm({
-                            ...categoryForm,
-                            aliases: e.target.value,
-                          })
-                        }
-                        placeholder="alias1, alias2"
-                      />
-                    </div>
-                  </div>
-                  {error && (
-                    <p className="text-sm text-red-600 bg-red-50 p-2 rounded">
-                      {error}
-                    </p>
-                  )}
-                  <div className="flex gap-2">
-                    <Button type="submit" disabled={saving}>
-                      {saving ? "Saxlanır..." : "Saxla"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setShowCategoryForm(false)}
-                    >
-                      Ləğv et
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          )}
-
-          <Card>
-            <CardContent className="p-0">
-              <table className="w-full">
-                <thead className="bg-slate-50 border-b">
-                  <tr>
-                    <th className="text-left p-4 font-medium text-slate-600">
-                      Kateqoriya
-                    </th>
-                    <th className="text-left p-4 font-medium text-slate-600">
-                      Slug
-                    </th>
-                    <th className="text-left p-4 font-medium text-slate-600">
-                      Aliaslar
-                    </th>
-                    <th className="text-left p-4 font-medium text-slate-600">
-                      Məhsullar
-                    </th>
-                    <th className="text-right p-4 font-medium text-slate-600">
-                      Əməliyyatlar
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {categories.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        className="text-center py-12 text-slate-500"
-                      >
-                        <FolderTree className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                        <p>Kateqoriya tapılmadı</p>
-                      </td>
-                    </tr>
-                  ) : (
-                    categories.map((cat) => (
-                      <tr key={cat.id} className="border-b hover:bg-slate-50">
-                        <td className="p-4">
-                          <p className="font-medium text-slate-900">
-                            {cat.name}
-                          </p>
-                          {cat.nameEn && (
-                            <p className="text-sm text-slate-500">
-                              {cat.nameEn}
-                            </p>
-                          )}
-                        </td>
-                        <td className="p-4 text-slate-600">{cat.slug}</td>
-                        <td className="p-4 text-slate-500 text-sm">
-                          {cat.aliases || "-"}
-                        </td>
-                        <td className="p-4">{cat._count.products}</td>
-                        <td className="p-4 text-right">
-                          <div className="flex gap-2 justify-end">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openCategoryForm(cat)}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button size="sm" variant="destructive">
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>
-                                    Kateqoriyanı sil?
-                                  </AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    {cat._count.products > 0
-                                      ? `Bu kateqoriyaya ${cat._count.products} məhsul bağlıdır. Əvvəlcə məhsulları silin.`
-                                      : `"${cat.name}" kateqoriyası silinəcək.`}
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Ləğv et</AlertDialogCancel>
-                                  {cat._count.products === 0 && (
-                                    <AlertDialogAction
-                                      onClick={() =>
-                                        handleCategoryDelete(cat.id)
-                                      }
-                                      className="bg-red-600 hover:bg-red-700"
-                                    >
-                                      Sil
-                                    </AlertDialogAction>
-                                  )}
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Product Types Tab */}
-        <TabsContent value="types" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="w-64">
-              <Label className="text-sm text-slate-600">Məhsul seçin</Label>
-              <Select
-                value={selectedProduct}
-                onValueChange={setSelectedProduct}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Məhsul seçin" />
-                </SelectTrigger>
-                <SelectContent>
-                  {products.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {selectedProduct && (
-              <Button onClick={() => openTypeForm()}>
-                <Plus className="w-4 h-4 mr-2" />
-                Yeni növ
-              </Button>
-            )}
-          </div>
-
-          {showTypeForm && (
-            <Card className="border-emerald-200 bg-emerald-50/30">
-              <CardHeader>
-                <CardTitle>
-                  {editingType ? "Növü redaktə et" : "Yeni məhsul növü"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleTypeSubmit} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Ad (AZ) *</Label>
-                      <Input
-                        value={typeForm.name}
-                        onChange={(e) =>
-                          setTypeForm({ ...typeForm, name: e.target.value })
-                        }
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Label>Ad (EN)</Label>
-                      <Input
-                        value={typeForm.nameEn}
-                        onChange={(e) =>
-                          setTypeForm({ ...typeForm, nameEn: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <Label>Ad (RU)</Label>
-                      <Input
-                        value={typeForm.nameRu}
-                        onChange={(e) =>
-                          setTypeForm({ ...typeForm, nameRu: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <Label>Aliaslar</Label>
-                      <Input
-                        value={typeForm.aliases}
-                        onChange={(e) =>
-                          setTypeForm({ ...typeForm, aliases: e.target.value })
-                        }
-                        placeholder="alias1, alias2"
-                      />
-                    </div>
-                  </div>
-                  {error && (
-                    <p className="text-sm text-red-600 bg-red-50 p-2 rounded">
-                      {error}
-                    </p>
-                  )}
-                  <div className="flex gap-2">
-                    <Button type="submit" disabled={saving}>
-                      {saving ? "Saxlanır..." : "Saxla"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setShowTypeForm(false)}
-                    >
-                      Ləğv et
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          )}
-
-          {selectedProduct ? (
-            <Card>
-              <CardContent className="p-0">
-                <table className="w-full">
-                  <thead className="bg-slate-50 border-b">
-                    <tr>
-                      <th className="text-left p-4 font-medium text-slate-600">
-                        Növ adı
-                      </th>
-                      <th className="text-left p-4 font-medium text-slate-600">
-                        Aliaslar
-                      </th>
-                      <th className="text-left p-4 font-medium text-slate-600">
-                        Qiymətlər
-                      </th>
-                      <th className="text-right p-4 font-medium text-slate-600">
-                        Əməliyyatlar
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {productTypes.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={4}
-                          className="text-center py-12 text-slate-500"
-                        >
-                          <Tag className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                          <p>Bu məhsul üçün növ yoxdur</p>
-                        </td>
-                      </tr>
                     ) : (
-                      productTypes.map((pt) => (
-                        <tr
-                          key={pt.id}
-                          className="border-b hover:bg-slate-50"
-                        >
-                          <td className="p-4">
-                            <p className="font-medium text-slate-900">
-                              {pt.name}
-                            </p>
-                            {pt.nameEn && (
-                              <p className="text-sm text-slate-500">
-                                {pt.nameEn}
-                              </p>
-                            )}
-                          </td>
-                          <td className="p-4 text-slate-500 text-sm">
-                            {pt.aliases || "-"}
-                          </td>
-                          <td className="p-4">{pt._count.prices}</td>
-                          <td className="p-4 text-right">
-                            <div className="flex gap-2 justify-end">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openTypeForm(pt)}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button size="sm" variant="destructive">
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>
-                                      Növü sil?
-                                    </AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      "{pt.name}" növü və ona bağlı qiymətlər
-                                      silinəcək.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>
-                                      Ləğv et
-                                    </AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => handleTypeDelete(pt.id)}
-                                      className="bg-red-600 hover:bg-red-700"
-                                    >
-                                      Sil
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
+                      <Package className="w-8 h-8 text-slate-300" />
                     )}
-                  </tbody>
-                </table>
+                    <div className="absolute inset-0 bg-black/50 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <ImageIcon className="w-5 h-5 text-white" />
+                    </div>
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-slate-900 truncate">
+                      {product.nameAz || product.nameEn}
+                    </h4>
+                    <p className="text-sm text-slate-500 truncate">
+                      {product.nameEn}
+                    </p>
+                    
+                    {product.globalCategory && (
+                      <Badge variant="outline" className="mt-1 text-xs">
+                        {product.globalCategory.nameAz || product.globalCategory.nameEn}
+                      </Badge>
+                    )}
+
+                    {/* Data source counts */}
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {product._count.localProducts > 0 && (
+                        <Badge className="bg-emerald-100 text-emerald-700 text-xs">
+                          AZ: {product._count.localProducts}
+                        </Badge>
+                      )}
+                      {product._count.euProducts > 0 && (
+                        <Badge className="bg-blue-100 text-blue-700 text-xs">
+                          EU: {product._count.euProducts}
+                        </Badge>
+                      )}
+                      {product._count.faoProducts > 0 && (
+                        <Badge className="bg-amber-100 text-amber-700 text-xs">
+                          FAO: {product._count.faoProducts}
+                        </Badge>
+                      )}
+                      {product._count.fpmaCommodities > 0 && (
+                        <Badge className="bg-purple-100 text-purple-700 text-xs">
+                          FPMA: {product._count.fpmaCommodities}
+                        </Badge>
+                      )}
+                    </div>
+
+                    <div className="mt-1 text-xs text-slate-400">
+                      <Layers className="inline w-3 h-3 mr-1" />
+                      {product._count.productVarieties} növ
+                    </div>
+                  </div>
+
+                  <ChevronRight className="w-5 h-5 text-slate-300" />
+                </div>
               </CardContent>
             </Card>
-          ) : (
-            <Card>
-              <CardContent className="py-12 text-center text-slate-500">
-                <Tag className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                <p>Növləri görmək üçün yuxarıdan məhsul seçin</p>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-      </Tabs>
+          ))}
+        </div>
+
+        {/* Edit Panel */}
+        {selectedProduct && (
+          <Card className="fixed bottom-0 left-0 right-0 border-t-2 border-blue-500 rounded-b-none shadow-xl">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Edit2 className="w-5 h-5" />
+                Redaktə: {selectedProduct.nameAz || selectedProduct.nameEn}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pb-6">
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Şəkil URL
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="https://example.com/image.jpg"
+                      defaultValue={selectedProduct.image || ""}
+                      id="imageUrl"
+                    />
+                    <Button
+                      onClick={() => {
+                        const input = document.getElementById("imageUrl") as HTMLInputElement;
+                        updateProductImage(selectedProduct.id, input.value);
+                      }}
+                    >
+                      Yadda saxla
+                    </Button>
+                  </div>
+                </div>
+                <a
+                  href={`/products/${selectedProduct.slug}`}
+                  target="_blank"
+                  className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Səhifəyə bax
+                </a>
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedProduct(null)}
+                >
+                  Bağla
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
-
