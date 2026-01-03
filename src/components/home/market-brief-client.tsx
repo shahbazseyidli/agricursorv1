@@ -300,7 +300,7 @@ export function MarketBriefClient({
               </p>
 
               {/* AI Search Result */}
-              {(searchResult || searchError || isSearching) && (
+              {(streamingAnswer || searchError || isSearching) && (
                 <div className="mt-6 text-left">
                   <Card className="bg-white/10 backdrop-blur-sm border-white/20">
                     <CardContent className="p-6">
