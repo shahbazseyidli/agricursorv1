@@ -243,8 +243,15 @@ export default function GlobalProductsPage() {
     try {
       const res = await fetch("/api/admin/eu-products");
       const data = await res.json();
-      if (data.success) {
-        setEuProducts(data.data);
+      // API returns { success: true, data: [...products] }
+      if (data.success && Array.isArray(data.data)) {
+        setEuProducts(data.data.map((p: any) => ({
+          id: p.id,
+          nameEn: p.nameEn,
+          nameAz: p.nameAz,
+          category: p.category || p.eurostatCode || p.ecAgrifoodCode,
+          globalProductId: p.globalProductId,
+        })));
       } else if (Array.isArray(data)) {
         setEuProducts(data);
       }
@@ -271,8 +278,14 @@ export default function GlobalProductsPage() {
     try {
       const res = await fetch("/api/admin/fpma-commodities");
       const data = await res.json();
-      if (data.success) {
-        setFpmaCommodities(data.data);
+      // API returns { success: true, data: [...commodities] }
+      if (data.success && Array.isArray(data.data)) {
+        setFpmaCommodities(data.data.map((c: any) => ({
+          id: c.id,
+          name: c.nameEn || c.name,
+          code: c.code,
+          globalProductId: c.globalProductId,
+        })));
       } else if (Array.isArray(data)) {
         setFpmaCommodities(data);
       }
@@ -285,8 +298,14 @@ export default function GlobalProductsPage() {
     try {
       const res = await fetch("/api/admin/fao-products");
       const data = await res.json();
-      if (data.success) {
-        setFaoProducts(data.data);
+      // API returns { success: true, data: [...products] }
+      if (data.success && Array.isArray(data.data)) {
+        setFaoProducts(data.data.map((p: any) => ({
+          id: p.id,
+          itemNameEn: p.nameEn || p.itemNameEn,
+          itemCode: p.itemCode,
+          globalProductId: p.globalProductId,
+        })));
       } else if (Array.isArray(data)) {
         setFaoProducts(data);
       }
@@ -1241,11 +1260,38 @@ interface MappingSectionProps {
 }
 
 function MappingSection({ title, description, items, allGlobalProducts, getGlobalProduct, onEdit }: MappingSectionProps) {
-  const unlinkedItems = items.filter(i => !i.globalProductId);
-  const linkedItems = items.filter(i => i.globalProductId);
+  const [showAllUnlinked, setShowAllUnlinked] = useState(false);
+  const [showAllLinked, setShowAllLinked] = useState(false);
+  const [searchFilter, setSearchFilter] = useState("");
+
+  const filteredItems = items.filter(i => 
+    i.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
+    (i.code && i.code.toLowerCase().includes(searchFilter.toLowerCase()))
+  );
+  
+  const unlinkedItems = filteredItems.filter(i => !i.globalProductId);
+  const linkedItems = filteredItems.filter(i => i.globalProductId);
+
+  const displayedUnlinked = showAllUnlinked ? unlinkedItems : unlinkedItems.slice(0, 50);
+  const displayedLinked = showAllLinked ? linkedItems : linkedItems.slice(0, 50);
 
   return (
     <>
+      {/* Search Filter */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Input
+              placeholder="Məhsul axtar..."
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Unlinked Items */}
       <Card>
         <CardHeader>
@@ -1275,7 +1321,7 @@ function MappingSection({ title, description, items, allGlobalProducts, getGloba
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {unlinkedItems.slice(0, 50).map((item) => (
+                  {displayedUnlinked.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.name}</TableCell>
                       <TableCell>
@@ -1293,8 +1339,23 @@ function MappingSection({ title, description, items, allGlobalProducts, getGloba
                   ))}
                 </TableBody>
               </Table>
-              {unlinkedItems.length > 50 && (
-                <p className="text-sm text-slate-500 mt-2">+ {unlinkedItems.length - 50} daha çox</p>
+              {unlinkedItems.length > 50 && !showAllUnlinked && (
+                <Button 
+                  variant="link" 
+                  className="mt-2 text-indigo-600"
+                  onClick={() => setShowAllUnlinked(true)}
+                >
+                  + {unlinkedItems.length - 50} daha çox göstər
+                </Button>
+              )}
+              {showAllUnlinked && unlinkedItems.length > 50 && (
+                <Button 
+                  variant="link" 
+                  className="mt-2 text-slate-500"
+                  onClick={() => setShowAllUnlinked(false)}
+                >
+                  Daha az göstər
+                </Button>
               )}
             </>
           )}
@@ -1318,7 +1379,7 @@ function MappingSection({ title, description, items, allGlobalProducts, getGloba
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {linkedItems.slice(0, 50).map((item) => {
+                {displayedLinked.map((item) => {
                   const gp = getGlobalProduct(item.globalProductId);
                   return (
                     <TableRow key={item.id}>
@@ -1345,8 +1406,23 @@ function MappingSection({ title, description, items, allGlobalProducts, getGloba
                 })}
               </TableBody>
             </Table>
-            {linkedItems.length > 50 && (
-              <p className="text-sm text-slate-500 mt-2">+ {linkedItems.length - 50} daha çox</p>
+            {linkedItems.length > 50 && !showAllLinked && (
+              <Button 
+                variant="link" 
+                className="mt-2 text-indigo-600"
+                onClick={() => setShowAllLinked(true)}
+              >
+                + {linkedItems.length - 50} daha çox göstər
+              </Button>
+            )}
+            {showAllLinked && linkedItems.length > 50 && (
+              <Button 
+                variant="link" 
+                className="mt-2 text-slate-500"
+                onClick={() => setShowAllLinked(false)}
+              >
+                Daha az göstər
+              </Button>
             )}
           </CardContent>
         </Card>

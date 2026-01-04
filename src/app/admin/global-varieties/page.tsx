@@ -135,10 +135,13 @@ export default function GlobalVarietiesPage() {
     try {
       const res = await fetch("/api/admin/global-products?limit=500");
       const data = await res.json();
-      if (data.success && data.data?.products) {
-        setGlobalProducts(data.data.products);
+      if (data.success && data.data) {
+        // data.data is array of products directly
+        setGlobalProducts(data.data);
       } else if (data.products) {
         setGlobalProducts(data.products);
+      } else if (Array.isArray(data.data)) {
+        setGlobalProducts(data.data);
       }
     } catch (error) {
       console.error("Error fetching global products:", error);
@@ -156,9 +159,26 @@ export default function GlobalVarietiesPage() {
 
       const res = await fetch(`/api/admin/global-varieties?${params}`);
       const data = await res.json();
-      if (data.success) {
-        setVarieties(data.data.varieties);
-        setPagination(data.data.pagination);
+      console.log("[DEBUG] Varieties API response:", JSON.stringify(data, null, 2));
+      
+      if (data.error) {
+        console.error("[DEBUG] API error:", data.error);
+        return;
+      }
+      
+      if (data.success && data.data) {
+        // Handle both formats: data.data.varieties or data.data directly
+        const varietiesData = data.data.varieties || data.data;
+        const paginationData = data.data.pagination || { page: 1, limit: 50, total: Array.isArray(varietiesData) ? varietiesData.length : 0, totalPages: 1 };
+        
+        console.log("[DEBUG] varietiesData:", varietiesData?.length, "items");
+        
+        if (Array.isArray(varietiesData)) {
+          setVarieties(varietiesData);
+          setPagination(paginationData);
+        }
+      } else {
+        console.log("[DEBUG] No success or no data:", data);
       }
     } catch (error) {
       console.error("Error fetching varieties:", error);
@@ -192,9 +212,10 @@ export default function GlobalVarietiesPage() {
     try {
       const res = await fetch("/api/admin/eu-products?limit=200");
       const data = await res.json();
-      if (data.success && data.data?.products) {
+      // API returns { success: true, data: [...products] }
+      if (data.success && Array.isArray(data.data)) {
         setEuProducts(
-          data.data.products.map((p: any) => ({
+          data.data.map((p: any) => ({
             id: p.id,
             name: p.nameEn,
             code: p.eurostatCode || p.ecAgrifoodCode,
@@ -222,11 +243,12 @@ export default function GlobalVarietiesPage() {
     try {
       const res = await fetch("/api/admin/fao-products?limit=200");
       const data = await res.json();
-      if (data.success && data.data?.products) {
+      // API returns { success: true, data: [...products] }
+      if (data.success && Array.isArray(data.data)) {
         setFaoProducts(
-          data.data.products.map((p: any) => ({
+          data.data.map((p: any) => ({
             id: p.id,
-            name: p.nameEn,
+            name: p.nameEn || p.itemNameEn,
             code: p.itemCode,
             varietyId: p.globalProductVarietyId || null,
             varietyName: p.globalProductVariety?.nameEn || null,
@@ -242,11 +264,12 @@ export default function GlobalVarietiesPage() {
     try {
       const res = await fetch("/api/admin/fpma-commodities?limit=200");
       const data = await res.json();
-      if (data.success && data.data?.commodities) {
+      // API returns { success: true, data: [...commodities] }
+      if (data.success && Array.isArray(data.data)) {
         setFpmaCommodities(
-          data.data.commodities.map((c: any) => ({
+          data.data.map((c: any) => ({
             id: c.id,
-            name: c.nameEn,
+            name: c.nameEn || c.name,
             code: c.code,
             varietyId: c.globalProductVarietyId || null,
             varietyName: c.globalProductVariety?.nameEn || null,

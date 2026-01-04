@@ -703,11 +703,38 @@ interface CountryMappingSectionProps {
 }
 
 function CountryMappingSection({ title, description, items, allGlobalCountries, getGlobalCountry, onEdit }: CountryMappingSectionProps) {
-  const unlinkedItems = items.filter(c => !c.globalCountryId);
-  const linkedItems = items.filter(c => c.globalCountryId);
+  const [showAllUnlinked, setShowAllUnlinked] = useState(false);
+  const [showAllLinked, setShowAllLinked] = useState(false);
+  const [searchFilter, setSearchFilter] = useState("");
+
+  const filteredItems = items.filter(c => 
+    c.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
+    c.code.toLowerCase().includes(searchFilter.toLowerCase())
+  );
+
+  const unlinkedItems = filteredItems.filter(c => !c.globalCountryId);
+  const linkedItems = filteredItems.filter(c => c.globalCountryId);
+
+  const displayedUnlinked = showAllUnlinked ? unlinkedItems : unlinkedItems.slice(0, 30);
+  const displayedLinked = showAllLinked ? linkedItems : linkedItems.slice(0, 50);
 
   return (
     <>
+      {/* Search Filter */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Input
+              placeholder="Ölkə axtar..."
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Unlinked Items */}
       <Card>
         <CardHeader>
@@ -737,7 +764,7 @@ function CountryMappingSection({ title, description, items, allGlobalCountries, 
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {unlinkedItems.slice(0, 30).map((item) => (
+                  {displayedUnlinked.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.name}</TableCell>
                       <TableCell>
@@ -755,8 +782,23 @@ function CountryMappingSection({ title, description, items, allGlobalCountries, 
                   ))}
                 </TableBody>
               </Table>
-              {unlinkedItems.length > 30 && (
-                <p className="text-sm text-slate-500 mt-2">+ {unlinkedItems.length - 30} daha çox</p>
+              {unlinkedItems.length > 30 && !showAllUnlinked && (
+                <Button 
+                  variant="link" 
+                  className="mt-2 text-cyan-600"
+                  onClick={() => setShowAllUnlinked(true)}
+                >
+                  + {unlinkedItems.length - 30} daha çox göstər
+                </Button>
+              )}
+              {showAllUnlinked && unlinkedItems.length > 30 && (
+                <Button 
+                  variant="link" 
+                  className="mt-2 text-slate-500"
+                  onClick={() => setShowAllUnlinked(false)}
+                >
+                  Daha az göstər
+                </Button>
               )}
             </>
           )}
@@ -780,7 +822,7 @@ function CountryMappingSection({ title, description, items, allGlobalCountries, 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {linkedItems.slice(0, 50).map((item) => {
+                {displayedLinked.map((item) => {
                   const gc = getGlobalCountry(item.globalCountryId);
                   return (
                     <TableRow key={item.id}>
@@ -807,8 +849,23 @@ function CountryMappingSection({ title, description, items, allGlobalCountries, 
                 })}
               </TableBody>
             </Table>
-            {linkedItems.length > 50 && (
-              <p className="text-sm text-slate-500 mt-2">+ {linkedItems.length - 50} daha çox</p>
+            {linkedItems.length > 50 && !showAllLinked && (
+              <Button 
+                variant="link" 
+                className="mt-2 text-cyan-600"
+                onClick={() => setShowAllLinked(true)}
+              >
+                + {linkedItems.length - 50} daha çox göstər
+              </Button>
+            )}
+            {showAllLinked && linkedItems.length > 50 && (
+              <Button 
+                variant="link" 
+                className="mt-2 text-slate-500"
+                onClick={() => setShowAllLinked(false)}
+              >
+                Daha az göstər
+              </Button>
             )}
           </CardContent>
         </Card>

@@ -2,7 +2,7 @@
 
 Bu sənəd sistemin **Admin Paneli** (`/admin`) üzrə mövcud funksionallıqları və onlardan istifadə qaydalarını əhatə edir.
 
-**Son yenilənmə:** 2026-01-02
+**Son yenilənmə:** 2026-01-04
 
 ---
 
@@ -23,189 +23,187 @@ Bu sənəd sistemin **Admin Paneli** (`/admin`) üzrə mövcud funksionallıqlar
 
 ---
 
-## 2. Əsas Panel (Dashboard)
-**Marşrut:** `/admin`
+## 2. Admin Panel Keçidləri
 
-Bu səhifə admin panelinin mərkəzi nöqtəsidir.
-
-### Statistika Kartları
-- **Məhsullar:** Ümumi məhsul sayı
-- **Bazarlar:** Ümumi bazar sayı
-- **Qiymətlər:** Ümumi qiymət qeydi sayı
-- **Kateqoriyalar:** Ümumi kateqoriya sayı
-
-### Sürətli Keçidlər
-- Yeni məhsul əlavə et
-- Yeni bazar əlavə et
-- Qiymət yüklə
-- Bütün bazarları gör
+| Səhifə | Marşrut | Təsvir |
+|--------|---------|--------|
+| Dashboard | `/admin` | Əsas panel və statistika |
+| Bazarlar | `/admin/markets` | Bazar idarəetməsi |
+| Məhsullar | `/admin/products` | AZ məhsulları idarəetməsi |
+| Qiymətlər | `/admin/prices` | Qiymət yükləmə |
+| Global Məhsullar | `/admin/global-products` | Universal məhsul xəritələmə |
+| Global Ölkələr | `/admin/global-countries` | Universal ölkə xəritələmə |
+| Global Varieties | `/admin/global-varieties` | Məhsul növləri xəritələmə |
+| EU Məhsullar | `/admin/eu-products` | EU məhsul idarəetməsi |
+| EU Sinxronizasiya | `/admin/eu-sync` | Eurostat data sinxronizasiyası |
+| Yükləmələr | `/admin/upload` | Fayl yükləmə |
 
 ---
 
-## 3. Bazarlar İdarəetməsi
+## 3. Global Məhsullar İdarəetməsi
+
+**Marşrut:** `/admin/global-products`
+
+Bu səhifə 4 mənbədən (AZ, EU, FAO, FPMA) məhsulları birləşdirmək üçün istifadə olunur.
+
+### 3.1 Əsas Funksiyalar
+
+#### Yeni Global Məhsul Yaratmaq
+1. "+ Yeni Global Məhsul" düyməsini basın
+2. Daxil edin:
+   - **Slug** (tələb olunur, URL identifikatoru)
+   - **Ad (EN)** (tələb olunur)
+   - **Ad (AZ)** (opsional)
+   - **Kateqoriya** (dropdown-dan seçin)
+3. "Yarat" düyməsini basın
+
+#### Məhsulu Variety-yə Çevirmək
+1. Cədvəldə "Çevir" düyməsini basın
+2. Hədəf məhsulu seçin (bu məhsulun variety-si olacaq)
+3. "Çevir" düyməsini basın
+4. **Qeyd:** Əlaqəli bütün mənbə məlumatları köçürülür
+
+---
+
+### 3.2 Mənbə Xəritələmə (Tablar)
+
+Her tab müvafiq mənbədən məhsulları göstərir:
+
+| Tab | Mənbə | Bağlama |
+|-----|-------|---------|
+| AZ | agro.gov.az | Product → GlobalProduct |
+| EU | Eurostat | EuProduct → GlobalProductVariety |
+| FAO | FAOSTAT | FaoProduct → GlobalProductVariety |
+| FPMA | FAO FPMA | FpmaCommodity → GlobalProductVariety |
+
+#### Məhsulu Bağlamaq
+1. "Bağlanmamış" siyahısından məhsul seçin
+2. "Bağla" düyməsini basın
+3. Açılan dialogda:
+   - Global məhsul seçin
+   - Variety seçin (və ya "base" seçin)
+4. "Bağla" düyməsini basın
+
+#### Bağlantını Redaktə Etmək
+1. "Bağlanmış" siyahısından məhsul tapın
+2. "Redaktə" düyməsini basın
+3. Yeni global məhsul/variety seçin
+4. "Yadda saxla" düyməsini basın
+
+---
+
+## 4. Global Ölkələr İdarəetməsi
+
+**Marşrut:** `/admin/global-countries`
+
+Bu səhifə 4 mənbədən ölkələri birləşdirmək üçün istifadə olunur.
+
+### 4.1 Mənbə Tabları
+
+| Tab | Mənbə | Sayı |
+|-----|-------|------|
+| AZ | Azerbaijan Data | 1 |
+| EU | Eurostat | 27 |
+| FAO | FAOSTAT | 245+ |
+| FPMA | FAO FPMA | 90+ |
+
+### 4.2 Ölkə Bağlamaq
+1. "Bağlanmamış" siyahısından ölkə seçin
+2. "Bağla" düyməsini basın
+3. Global ölkəni seçin
+4. "Bağla" düyməsini basın
+
+---
+
+## 5. Global Varieties İdarəetməsi
+
+**Marşrut:** `/admin/global-varieties`
+
+Bu səhifə məhsul növlərini (varieties) idarə etmək üçündür.
+
+### 5.1 Variety Hierarchiyası
+
+```
+GlobalProduct: Pomidor
+├── GlobalProductVariety: Base (Pomidor özü)
+├── GlobalProductVariety: Çeri Pomidor
+│   ├── AZ ProductType: Çeri pomidor → bağlı
+│   ├── FAO Product: Cherry tomatoes → bağlı
+│   └── EU Product: Cherry tomatoes → bağlı
+└── GlobalProductVariety: Pomidor pastaları
+```
+
+### 5.2 Yeni Variety Yaratmaq
+1. "+ Yeni Variety" düyməsini basın
+2. Global məhsul seçin
+3. Daxil edin:
+   - **Slug** (tələb olunur)
+   - **Ad (EN)** (tələb olunur)
+   - **Ad (AZ)** (opsional)
+4. "Yarat" düyməsini basın
+
+### 5.3 Mənbə Məhsullarını Variety-yə Bağlamaq
+
+İş axını:
+1. Global Məhsul seçin
+2. Variety seçin (və ya yaradın)
+3. Mənbə seçin (AZ, EU, FAO, FPMA)
+4. Həmin mənbədən məhsul/product_type seçin
+5. "Bağla" düyməsini basın
+
+---
+
+## 6. Bazarlar İdarəetməsi
+
 **Marşrut:** `/admin/markets`
 
-### 3.1 Bazar Siyahısı
-- Bütün bazarların cədvəl görünüşü
-- **Filterlər:**
-  - Ölkə seçimi
-  - Bazar növü seçimi (Pərakəndə, Topdansatış, və s.)
-
-### 3.2 Yeni Bazar Yaratmaq
+### 6.1 Yeni Bazar Yaratmaq
 1. "+ Yeni Bazar" düyməsini basın
-2. Dialog pəncərəsində daxil edin:
+2. Daxil edin:
    - **Ad** (tələb olunur)
    - **Ölkə** (dropdown-dan seçin)
    - **Bazar növü** (dropdown-dan seçin)
 3. "Əlavə et" düyməsini basın
 
-### 3.3 Bazarı Redaktə Etmək
-1. Cədvəldə bazarın "Düzəlt" düyməsini basın
-2. Açılan formada dəyişiklik edin
-3. "Yadda saxla" düyməsini basın
-
-### 3.4 Bazarı Silmək
-1. Cədvəldə bazarın "Sil" düyməsini basın
-2. Təsdiq dialoqundan "Sil" seçin
-3. **Qeyd:** Bazarla əlaqəli qiymətlər də silinəcək
-
-### 3.5 Bütün Bazarları Silmək
-1. "Hamısını sil" düyməsini basın
-2. Təsdiq dialoqundan onaylayın
-3. **Xəbərdarlıq:** Bu əməliyyat geri qaytarıla bilməz
-
 ---
 
-## 4. Məhsullar İdarəetməsi
+## 7. AZ Məhsullar İdarəetməsi
+
 **Marşrut:** `/admin/products`
 
 Bu səhifədə 3 tab mövcuddur:
 
-### 4.1 Məhsullar Tabı
+### 7.1 Məhsullar Tabı
+- AZ məhsullarının cədvəli
+- Kateqoriya filteri
 
-#### Məhsul Siyahısı
-- Bütün məhsulların cədvəli
-- **Filterlər:** Kateqoriya seçimi
+### 7.2 Kateqoriyalar Tabı
+- Kateqoriya siyahısı
+- Hər kateqoriya üçün məhsul sayı
 
-#### Yeni Məhsul Yaratmaq
-1. "+ Yeni Məhsul" düyməsini basın
-2. Daxil edin:
-   - **Ad (AZ)** - tələb olunur
-   - **Slug** - URL identifikatoru (EN, kebab-case)
-   - **Kateqoriya** - dropdown-dan seçin
-3. "Əlavə et" düyməsini basın
-
-#### Məhsulu Redaktə/Silmək
-- Cədvəldəki əməliyyat düymələrini istifadə edin
+### 7.3 Məhsul Növləri Tabı
+- ProductType-ların siyahısı
+- Məhsul filteri
 
 ---
 
-### 4.2 Kateqoriyalar Tabı
+## 8. Qiymət İdarəetməsi
 
-#### Kateqoriya Siyahısı
-- Bütün kateqoriyaların cədvəli
-- Hər kateqoriya üçün məhsul sayı göstərilir
-
-#### Yeni Kateqoriya Yaratmaq
-1. "+ Yeni Kateqoriya" düyməsini basın
-2. Daxil edin:
-   - **Ad** - tələb olunur
-3. "Əlavə et" düyməsini basın
-
----
-
-### 4.3 Məhsul Növləri Tabı
-
-#### Məhsul Növləri Siyahısı
-- Bütün məhsul növlərinin (variantların) cədvəli
-- **Filterlər:** Məhsul seçimi
-
-#### Yeni Məhsul Növü Yaratmaq
-1. "+ Yeni Növ" düyməsini basın
-2. Daxil edin:
-   - **Ad (AZ)** - tələb olunur
-   - **Məhsul** - dropdown-dan seçin
-   - **Ad (EN)** - opsional
-   - **Ad (RU)** - opsional
-3. "Əlavə et" düyməsini basın
-
----
-
-## 5. Qiymət İdarəetməsi
 **Marşrut:** `/admin/prices`
 
-### 5.1 Statistika Kartları
-- Ümumi qiymət qeydlərinin sayı
-- Hər bazar növü üzrə qiymət sayı:
-  - Pərakəndə satış
-  - Topdansatış
-  - Müəssisə tərəfindən alış
-  - Sahədən satış
+### 8.1 Qiymət Yükləmə
 
-### 5.2 Qiymət Yükləmə
+Hər bazar növü üçün ayrı yükləmə:
 
-Hər bazar növü üçün ayrı yükləmə bölməsi var:
+| Fayl | Bazar Növü |
+|------|------------|
+| upload_retail.xlsx | Pərakəndə |
+| upload_wholesale.xlsx | Topdansatış |
+| upload_processing.xlsx | Müəssisə |
+| upload_field.xlsx | Sahədən satış |
 
-1. Müvafiq bazar növünü tapın
-2. "Fayl seç" düyməsini basın
-3. Excel faylını seçin:
-   - `upload_retail.xlsx` - Pərakəndə
-   - `upload_wholesale.xlsx` - Topdansatış
-   - `upload_processing.xlsx` - Müəssisə
-   - `upload_field.xlsx` - Sahədən satış
-4. Yükləmə avtomatik başlayacaq
-5. Nəticələr göstəriləcək:
-   - **Yeni:** Əlavə edilən qeydlər
-   - **Yeniləndi:** Mövcud qeydlər
-   - **Keçildi:** Dəyişiklik olmadan keçilən
-   - **Xətalar:** Problemli sətirlər
+### 8.2 Excel Fayl Formatı
 
-### 5.3 Bütün Qiymətləri Silmək
-1. "Bütün qiymətləri sil" düyməsini basın
-2. Təsdiq dialoqundan silinəcək qeyd sayını görün
-3. Onaylayın
-4. **Xəbərdarlıq:** Bu əməliyyat geri qaytarıla bilməz
-
----
-
-## 6. Ümumi Məlumat Yükləmə
-**Marşrut:** `/admin/upload`
-
-Bu səhifədən bütün növ faylları yükləyə bilərsiniz:
-
-### Fayl Növləri
-| Fayl | Məqsəd |
-|------|--------|
-| markets.xlsx | Bazar kataloqunu yeniləmək |
-| products.xlsx | Məhsul kataloqunu yeniləmək |
-| upload_*.xlsx | Qiymət məlumatlarını yükləmək |
-
-### Yükləmə Prosesi
-1. Fayl növünü seçin
-2. Faylı seçin
-3. Yükləmə tamamlanana qədər gözləyin
-4. Nəticələri yoxlayın
-
----
-
-## 7. Excel Fayl Formatları
-
-### 7.1 markets.xlsx
-| Sütun | Tələb | Açıqlama |
-|-------|-------|----------|
-| Market | Bəli | Bazar adı (AZ) |
-| type | Bəli | Bazar növü (nameAz ilə eyni olmalı) |
-
-### 7.2 products.xlsx
-| Sütun | Tələb | Açıqlama |
-|-------|-------|----------|
-| product_name | Bəli | Məhsul adı (AZ) |
-| category | Bəli | Kateqoriya adı |
-| slug | Bəli | URL identifikatoru |
-| name_en | Xeyr | İngilis adı |
-| name_ru | Xeyr | Rus adı |
-
-### 7.3 Qiymət faylları (upload_*.xlsx)
 | Sütun | Tələb | Açıqlama |
 |-------|-------|----------|
 | product_name | Bəli | Məhsul adı |
@@ -217,86 +215,92 @@ Bu səhifədən bütün növ faylları yükləyə bilərsiniz:
 | price_max | Bəli | Maksimum qiymət |
 | unit | Bəli | Ölçü vahidi |
 | currency | Bəli | Valyuta (AZN) |
-| source | Xeyr | Mənbə |
 
 ---
 
-## 8. Xəta Mesajları
-
-| Xəta | Səbəb | Həll |
-|------|-------|------|
-| "Məhsul tapılmadı" | Excel-dəki məhsul adı bazada yoxdur | products.xlsx-i əvvəl yükləyin |
-| "Bazar tapılmadı" | Excel-dəki bazar adı bazada yoxdur | markets.xlsx-i əvvəl yükləyin |
-| "Yanlış tarix formatı" | Tarix DD.MM.YYYY formatında deyil | Excel-də tarixi düzəldin |
-| "Qiymət rəqəm deyil" | Qiymət sütununda mətn var | Excel-də düzəldin |
-
----
-
-## 9. Məlumat Yükləmə Ardıcıllığı
+## 9. Data Yükləmə Ardıcıllığı
 
 Düzgün ardıcıllıq:
-1. **markets.xlsx** - Əvvəlcə bazarları yükləyin
-2. **products.xlsx** - Sonra məhsulları yükləyin
-3. **upload_*.xlsx** - Nəhayət qiymətləri yükləyin
-
-Bu ardıcıllıq vacibdir, çünki qiymət yükləməsi mövcud bazar və məhsul qeydlərinə istinad edir.
+1. **Global Countries** - Əvvəlcə global ölkələri seed edin
+2. **markets.xlsx** - Bazarları yükləyin
+3. **products.xlsx** - Məhsulları yükləyin
+4. **Global Products** - Global məhsulları yaradın/xəritələyin
+5. **Global Varieties** - Variety-ləri yaradın
+6. **upload_*.xlsx** - Qiymətləri yükləyin
 
 ---
 
-## 10. EU Məlumatları İdarəetməsi
+## 10. Seed Skriptləri
 
-### 10.1 EU Ölkələri və Məhsulları
-
-EU məlumatları avtomatik olaraq Eurostat və EC Agri-food API-larından gətirilir.
-
-**Skriptlər:**
 ```bash
-# EU məlumatlarını gətir
+# Global ölkələri seed et
+npx tsx scripts/seed-global-countries.ts
+
+# Global məhsulları seed et
+npx tsx scripts/seed-global-products.ts
+
+# Base variety-ləri yarat
+npx tsx scripts/seed-base-varieties.ts
+
+# EU datanı gətir
 npx tsx scripts/seed-eu-data.ts
 
-# AZ agregat qiymətlərini hesabla
-npx tsx scripts/calculate-az-aggregates.ts
+# FAO datanı gətir
+npx tsx scripts/seed-fao-data.ts
 
-# Məhsul məzmununu əlavə et
-npx tsx scripts/seed-product-content.ts
+# FPMA datanı gətir
+npx tsx scripts/seed-fpma-data.ts
 
-# Məhsul şəkillərini gətir
-npx tsx scripts/fetch-product-images.ts
-```
-
-### 10.2 GlobalProduct İdarəetməsi
-
-GlobalProduct cədvəli AZ və EU məhsullarını birləşdirir.
-
-**Əlaqələr:**
-- Bir GlobalProduct → Bir və ya daha çox AZ Product
-- Bir GlobalProduct → Bir və ya daha çox EU EuProduct
-
-### 10.3 Valyuta Məzənnələri
-
-Valyuta məzənnələri CBAR (rəsmi AZN kursları) və ExchangeRate-API-dan (166 dünya valyutası) gətirilir.
-
-**Yeniləmə tezliyi:** Gündə 4 dəfə (10:00, 14:00, 19:00, 02:00 UTC+4)
-
-**Skript:**
-```bash
+# Valyutaları yenilə
 npx tsx scripts/update-currencies.ts
+
+# AZ aqreqatlarını hesabla
+npx tsx scripts/calculate-az-aggregates.ts
 ```
 
 ---
 
-## 11. Tövsiyələr
+## 11. Xəta Həlləri
 
-1. **Yedəkləmə:** Mühüm əməliyyatlardan əvvəl database-i yedəkləyin
-2. **Kiçik partiyalar:** Böyük faylları kiçik hissələrə bölün
-3. **Yoxlama:** Yükləmədən sonra statistikaları yoxlayın
-4. **Təmiz data:** Excel-də boş sətirlər və xüsusi simvollardan qaçının
-5. **EU datası:** EU məlumatları avtomatik yeniləndiyindən, manual dəyişiklik etməyin
-6. **GlobalProduct:** Məhsulları düzgün əlaqələndirdiyinizə əmin olun
+| Problem | Həll |
+|---------|------|
+| Səhifə boş görünür | Server restart edin: `npm run dev` |
+| Varieties görünmür | `npx prisma generate` işlədin |
+| EU/FAO tabı boş | Login olduğunuza əmin olun |
+| "Unauthorized" xətası | `/login`-dən yenidən giriş edin |
+| "Too many open files" | `ulimit -n 65536` işlədin |
 
 ---
 
-**Son yenilənmə:** 2026-01-02
+## 12. Tövsiyələr
 
+1. **Base Variety:** Hər GlobalProduct-un "base" variety-si olmalıdır
+2. **Mənbə əlaqələri:** Məhsulları silməzdən əvvəl əlaqələri yoxlayın
+3. **Slug format:** Slug-lar kebab-case olmalıdır (məs: `cherry-tomato`)
+4. **Yedəkləmə:** Böyük dəyişikliklərdən əvvəl database yedəkləyin:
+   ```bash
+   cp prisma/dev.db prisma/dev.db.backup
+   ```
 
+---
 
+## 13. API Endpoint-ləri
+
+### Admin API-ları
+
+| Endpoint | Metod | Təsvir |
+|----------|-------|--------|
+| /api/admin/global-products | GET, POST | Global məhsullar |
+| /api/admin/global-countries | GET, POST | Global ölkələr |
+| /api/admin/global-varieties | GET, POST | Global varieties |
+| /api/admin/global-price-stages | GET, POST | Price stages |
+| /api/admin/global-markets | GET, POST | Global markets |
+| /api/admin/eu-products | GET, POST | EU məhsulları |
+| /api/admin/fao-products | GET | FAO məhsulları |
+| /api/admin/fpma-commodities | GET | FPMA commodities |
+
+---
+
+**Son yenilənmə:** 2026-01-04
+
+*Yeni əlavələr: Global Varieties, GlobalCountry xəritələmə, GlobalPriceStage, GlobalMarket, Variety-yə çevirmə funksiyası*

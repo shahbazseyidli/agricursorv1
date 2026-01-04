@@ -2,119 +2,282 @@
 
 This document describes the current database schema and relationships for the **Agri-Food Price Intelligence Platform**.
 
-**Last Updated:** 2026-01-02  
+**Last Updated:** 2026-01-04  
 **Database:** SQLite (Prototype) / PostgreSQL (Production)  
-**ORM:** Prisma
+**ORM:** Prisma  
+**Schema Version:** 3.0 - Added FPMA, GlobalCategory, GlobalProductVariety, GlobalCountry, GlobalPriceStage, GlobalMarket
 
 ---
 
 ## 1. Overview
 
 ```
-┌────────────────────────────────────────────────────────────────────────────┐
-│                           Database Schema v2.0                              │
-├────────────────────────────────────────────────────────────────────────────┤
-│  GLOBAL ENTITIES           │  AZ ENTITIES          │  EU ENTITIES           │
-│  ──────────────────        │  ────────────         │  ────────────          │
-│  • GlobalProduct           │  • Country (AZ)       │  • EuCountry           │
-│  • GlobalProductMapping    │  • Market             │  • EuProduct           │
-│  • Unit                    │  • MarketType         │  • EuPrice             │
-│  • Currency                │  • Category           │                        │
-│  • FxRateHistory           │  • Product            │                        │
-│  • User                    │  • ProductType        │                        │
-│  • Upload                  │  • Price              │                        │
-│                            │  • AzPriceAggregate   │                        │
-└────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                               Database Schema v3.0                                       │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│  GLOBAL ENTITIES                 │  AZ ENTITIES          │  EU ENTITIES               │
+│  ────────────────────────        │  ────────────         │  ────────────              │
+│  • GlobalCountry                 │  • Country (AZ)       │  • EuCountry               │
+│  • GlobalProduct                 │  • Market             │  • EuProduct               │
+│  • GlobalProductVariety          │  • MarketType         │  • EuPrice                 │
+│  • GlobalCategory                │  • Category           │                            │
+│  • GlobalPriceStage              │  • Product            │  FAO ENTITIES              │
+│  • GlobalMarket                  │  • ProductType        │  ────────────              │
+│  • Unit                          │  • Price              │  • FaoCountry              │
+│  • Currency                      │  • AzPriceAggregate   │  • FaoProduct              │
+│  • FxRateHistory                 │                       │  • FaoPrice                │
+│  • User                          │                       │                            │
+│                                  │                       │  FPMA ENTITIES             │
+│                                  │                       │  ────────────              │
+│                                  │                       │  • FpmaCountry             │
+│                                  │                       │  • FpmaCommodity           │
+│                                  │                       │  • FpmaMarket              │
+│                                  │                       │  • FpmaSerie               │
+│                                  │                       │  • FpmaPrice               │
+└────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## 2. Global Entities
 
-### 2.1 GlobalProduct
+### 2.1 GlobalCountry
 
-Unified product registry linking AZ and EU products.
+Universal country registry linking all data sources.
 
 ```prisma
-model GlobalProduct {
-  id                       String    @id @default(cuid())
-  slug                     String    @unique // apple, tomato, potato
-  nameEn                   String    @map("name_en") // Apple
-  nameAz                   String?   @map("name_az") // Alma
-  nameRu                   String?   @map("name_ru") // Яблоко
-  category                 String?   // Fruits, Vegetables
-  faoCode                  String?   @map("fao_code") // FAO commodity code
-  hsCode                   String?   @map("hs_code") // HS trade code
-  eurostatCode             String?   @map("eurostat_code") // Eurostat code
-  defaultUnit              String    @default("kg") @map("default_unit")
-  image                    String?   // Product image URL
-  isActive                 Boolean   @default(true) @map("is_active")
+model GlobalCountry {
+  id          String   @id @default(cuid())
+  iso2        String   @unique // ISO 3166-1 alpha-2: AZ, US, DE
+  iso3        String   @unique // ISO 3166-1 alpha-3: AZE, USA, DEU
+  numericCode String?  // ISO 3166-1 numeric: 031, 840, 276
   
-  // Rich content fields
-  descriptionEn            String?   @map("description_en")
-  descriptionAz            String?   @map("description_az")
-  historyEn                String?   @map("history_en")
-  historyAz                String?   @map("history_az")
-  productionRegionsEn      String?   @map("production_regions_en")
-  productionRegionsAz      String?   @map("production_regions_az")
-  growingConditionsEn      String?   @map("growing_conditions_en")
-  growingConditionsAz      String?   @map("growing_conditions_az")
-  harvestingProcessEn      String?   @map("harvesting_process_en")
-  harvestingProcessAz      String?   @map("harvesting_process_az")
-  cultivationMethodsEn     String?   @map("cultivation_methods_en")
-  cultivationMethodsAz     String?   @map("cultivation_methods_az")
-  supplyChainEn            String?   @map("supply_chain_en")
-  supplyChainAz            String?   @map("supply_chain_az")
-  localLogisticsEn         String?   @map("local_logistics_en")
-  localLogisticsAz         String?   @map("local_logistics_az")
-  regulationsCertificationsEn String? @map("regulations_certifications_en")
-  regulationsCertificationsAz String? @map("regulations_certifications_az")
-  qualityStandardsEn       String?   @map("quality_standards_en")
-  qualityStandardsAz       String?   @map("quality_standards_az")
-  environmentalImpactEn    String?   @map("environmental_impact_en")
-  environmentalImpactAz    String?   @map("environmental_impact_az")
-  socialImpactEn           String?   @map("social_impact_en")
-  socialImpactAz           String?   @map("social_impact_az")
-  usesEn                   String?   @map("uses_en")
-  usesAz                   String?   @map("uses_az")
+  nameEn      String   // English name
+  nameAz      String?  // Azerbaijani name
+  nameRu      String?  // Russian name
+  
+  region      String   // Asia, Europe, Africa, Americas, Oceania
+  subRegion   String?  // Western Asia, Eastern Europe, etc.
+  
+  flagEmoji   String?  // 🇦🇿
+  flagUrl     String?  // Custom flag image URL
+  
+  isActive    Boolean  @default(true)
+  isFeatured  Boolean  @default(false) // Featured countries (AZ)
+  sortOrder   Int      @default(0)
 
-  // Links to local & EU products
-  localProducts            Product[]
-  euProducts               EuProduct[]
+  // Relations to source-specific country tables
+  azCountries    Country[]
+  euCountries    EuCountry[]
+  faoCountries   FaoCountry[]
+  fpmaCountries  FpmaCountry[]
+  globalMarkets  GlobalMarket[]
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| slug | String | Unique URL identifier (kebab-case) |
-| nameEn | String | English name |
-| nameAz | String? | Azerbaijani name |
-| category | String? | Product category |
-| faoCode | String? | FAO commodity code |
-| hsCode | String? | Harmonized System trade code |
-| eurostatCode | String? | Eurostat product code |
-| image | String? | Product image URL |
-| description* | String? | Product descriptions (EN/AZ) |
-| history* | String? | Product history (EN/AZ) |
-| uses* | String? | Product uses (EN/AZ) |
+| iso2 | String | ISO 3166-1 alpha-2 code (unique) |
+| iso3 | String | ISO 3166-1 alpha-3 code (unique) |
+| region | String | UN M49 region (Asia, Europe, etc.) |
+| subRegion | String? | UN M49 sub-region |
+| isFeatured | Boolean | Featured countries shown first |
 
 ---
 
-### 2.2 Unit
+### 2.2 GlobalProduct
+
+Unified product registry linking all data sources.
+
+```prisma
+model GlobalProduct {
+  id               String  @id @default(cuid())
+  slug             String  @unique // apple, tomato, potato
+  hsCode           String? // HS6: "070190", "080810"
+  
+  nameEn           String  // Apple
+  nameAz           String? // Alma
+  nameRu           String? // Яблоко
+  
+  globalCategoryId String? // Link to GlobalCategory
+  category         String? // Legacy: Fruits, Vegetables
+  
+  faoCode          String? // FAO Item Code (e.g., "515")
+  cpcCode          String? // CPC classification code
+  eurostatCode     String? // Eurostat code
+  fpmaCode         String? // FPMA base commodity code
+  
+  defaultUnit      String  @default("kg")
+  image            String?
+  
+  // Rich content
+  descriptionAz    String?
+  descriptionEn    String?
+  history          String?
+  uses             String?
+  nutrition        String?
+  storage          String?
+  seasonality      String?
+
+  // Relations
+  productVarieties GlobalProductVariety[]
+  localProducts    Product[]      // AZ products
+  euProducts       EuProduct[]    // EU products
+  faoProducts      FaoProduct[]   // FAO products
+  fpmaCommodities  FpmaCommodity[] // FPMA commodities
+}
+```
+
+---
+
+### 2.3 GlobalProductVariety
+
+Product varieties/types linked to data sources.
+
+```prisma
+model GlobalProductVariety {
+  id              String @id @default(cuid())
+  globalProductId String
+  
+  slug            String // base, red, white, imported, organic
+  nameEn          String // "Red", "White", "Base"
+  nameAz          String?
+  nameRu          String?
+  
+  hsCode          String? // HS code for this variety
+  description     String?
+  image           String?
+  
+  fpmaVarietyCode String? // "070190_2"
+  isAutoMatched   Boolean @default(false)
+  matchScore      Float?
+  
+  sortOrder       Int     @default(0)
+
+  // Relations
+  globalProduct   GlobalProduct @relation
+  productTypes    ProductType[]     // AZ product types
+  fpmaCommodities FpmaCommodity[]   // FPMA commodities
+  euProducts      EuProduct[]       // EU products
+  faoProducts     FaoProduct[]      // FAO products
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| slug | String | Unique within product (base, red, white) |
+| isAutoMatched | Boolean | Auto-matched vs manual mapping |
+| matchScore | Float? | Confidence score for auto-match |
+
+**Important:** Every GlobalProduct should have at least one "base" variety.
+
+---
+
+### 2.4 GlobalCategory
+
+Universal product categories.
+
+```prisma
+model GlobalCategory {
+  id            String   @id @default(cuid())
+  code          String   @unique // HS2 code: "07", "08", "10"
+  slug          String   @unique // vegetables, fruits, cereals
+  
+  nameEn        String
+  nameAz        String?
+  nameRu        String?
+  
+  description   String?
+  descriptionAz String?
+  icon          String?  // emoji or icon name
+  image         String?
+  sortOrder     Int      @default(0)
+
+  globalProducts  GlobalProduct[]
+  localCategories Category[]
+}
+```
+
+---
+
+### 2.5 GlobalPriceStage
+
+Universal price stage system (Wholesale, Retail, Producer, Processing).
+
+```prisma
+model GlobalPriceStage {
+  id          String   @id @default(cuid())
+  code        String   @unique // WHOLESALE, RETAIL, PRODUCER, PROCESSING
+  
+  nameEn      String   // Wholesale, Retail, Producer, Processing
+  nameAz      String?  // Topdan, Pərakəndə, İstehsalçı, Xammal alışı
+  nameRu      String?
+  
+  description String?
+  sortOrder   Int      @default(0)
+
+  // Source mappings
+  azMarketTypes  MarketType[]  // AZ market types
+  euPrices       EuPrice[]     // EU prices
+  faoPrices      FaoPrice[]    // FAO prices
+  fpmaSeries     FpmaSerie[]   // FPMA series
+}
+```
+
+| Code | Name (EN) | Name (AZ) | AZ Mapping |
+|------|-----------|-----------|------------|
+| WHOLESALE | Wholesale | Topdan | Topdansatış |
+| RETAIL | Retail | Pərakəndə | Pərakəndə satış |
+| PRODUCER | Producer | İstehsalçı | Sahədən satış |
+| PROCESSING | Processing | Xammal alışı | Müəssisə tərəfindən alış |
+
+---
+
+### 2.6 GlobalMarket
+
+Universal market system.
+
+```prisma
+model GlobalMarket {
+  id              String   @id @default(cuid())
+  
+  name            String   // National Average, Baku
+  nameEn          String?
+  nameAz          String?
+  nameRu          String?
+  
+  globalCountryId String
+  region          String?  // Region within country
+  city            String?
+  
+  marketType      String?  // PHYSICAL, NATIONAL_AVERAGE, REGIONAL
+  isNationalAvg   Boolean  @default(false)
+  aggregationType String?  // WEEKLY, MONTHLY
+
+  // Relations
+  globalCountry   GlobalCountry @relation
+  azMarkets       Market[]      // AZ markets
+  fpmaMarkets     FpmaMarket[]  // FPMA markets
+}
+```
+
+---
+
+### 2.7 Unit
 
 Measurement units with conversion rates.
 
 ```prisma
 model Unit {
-  id              String   @id @default(cuid())
-  code            String   @unique // kg, 100kg, lb, ton
-  nameEn          String   @map("name_en")
-  nameAz          String?  @map("name_az")
-  symbol          String   // kg, lb, t
-  category        String   // weight, volume, piece
-  conversionToKg  Decimal  @map("conversion_to_kg") // 1 kg = 1, 1 lb = 0.453592
-  isActive        Boolean  @default(true) @map("is_active")
-  sortOrder       Int      @default(0) @map("sort_order")
+  id             String   @id @default(cuid())
+  code           String   @unique // kg, 100kg, lb, ton
+  nameAz         String
+  nameEn         String
+  symbol         String?  // kg, lb, t
+  baseUnit       String   @default("kg")
+  conversionRate Float    @default(1) // Rate to convert to base unit
+  category       String   @default("weight")
+  fpmaAliases    String?  // JSON: ["Kg", "1 kg"]
 }
 ```
 
@@ -127,437 +290,174 @@ model Unit {
 
 ---
 
-### 2.3 Currency
+### 2.8 Currency
 
-Currency exchange rates (from CBAR and ExchangeRate-API).
+Currency exchange rates (USD-based).
 
 ```prisma
 model Currency {
   id          String   @id @default(cuid())
-  code        String   @unique // AZN, EUR, USD
+  code        String   @unique // USD, EUR, AZN
   symbol      String   // $, €, ₼
-  nameEn      String   @map("name_en")
-  nameAz      String?  @map("name_az")
-  rateToUSD   Decimal  @map("rate_to_usd") // Exchange rate: 1 USD = X of this currency
-  source      String?  // ExchangeRate-API
-  isBase      Boolean  @default(false) @map("is_base") // USD is base
-  isActive    Boolean  @default(true) @map("is_active")
-  updatedAt   DateTime @updatedAt
+  nameAz      String
+  nameEn      String?
+  rateToUSD   Float    @default(1) // 1 USD = X of this currency
+  isBase      Boolean  @default(false) // USD is base
+  isActive    Boolean  @default(true)
+  lastUpdated DateTime @default(now())
 }
 ```
 
-| Code | Symbol | Name (AZ) | Source |
-|------|--------|-----------|--------|
-| AZN | ₼ | Azərbaycan manatı | Base |
-| EUR | € | Avro | CBAR |
-| USD | $ | ABŞ dolları | CBAR |
-| RUB | ₽ | Rusiya rublu | CBAR |
-| TRY | ₺ | Türk lirəsi | CBAR |
+**Currency Source:** ExchangeRate-API (166+ world currencies, USD-based)
+
+| Code | Symbol | Rate to USD | Source |
+|------|--------|-------------|--------|
+| USD | $ | 1.0 | Base |
+| EUR | € | 0.92 | ExchangeRate-API |
+| AZN | ₼ | 1.70 | ExchangeRate-API |
+| RUB | ₽ | 89.5 | ExchangeRate-API |
 
 ---
 
-### 2.4 FxRateHistory
+## 3. Data Source Entities
 
-Historical exchange rate tracking.
+### 3.1 AZ Data Source (Azerbaijan)
 
-```prisma
-model FxRateHistory {
-  id           String   @id @default(cuid())
-  currencyCode String   @map("currency_code")
-  rateToUSD    Decimal  @map("rate_to_usd") // 1 USD = X of this currency
-  fetchedAt    DateTime @map("fetched_at")
-  source       String?  // exchangerate-api
-  createdAt    DateTime @default(now())
+| Model | Description |
+|-------|-------------|
+| Country | AZ country record |
+| MarketType | WHOLESALE, RETAIL, PROCESSING, FIELD |
+| Market | Physical trading locations |
+| Category | Product categories |
+| Product | Agricultural products |
+| ProductType | Product varieties |
+| Price | Price observations |
+| AzPriceAggregate | Weekly aggregated prices |
 
-  @@unique([currencyCode, date])
-}
+---
+
+### 3.2 EU Data Source (Eurostat)
+
+| Model | Description |
+|-------|-------------|
+| EuCountry | 27 EU member states |
+| EuProduct | EU agricultural products |
+| EuPrice | EU price observations |
+
+---
+
+### 3.3 FAO Data Source (FAOSTAT)
+
+| Model | Description |
+|-------|-------------|
+| FaoCountry | FAO countries (245+) |
+| FaoProduct | FAO agricultural products |
+| FaoPrice | FAO price observations |
+
+---
+
+### 3.4 FPMA Data Source (FAO Food Price Monitoring)
+
+| Model | Description |
+|-------|-------------|
+| FpmaCountry | FPMA countries |
+| FpmaCommodity | FPMA commodities |
+| FpmaMarket | FPMA markets |
+| FpmaSerie | FPMA data series |
+| FpmaPrice | FPMA price observations |
+
+---
+
+## 4. Entity Relationship Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                          │
+│  ┌─────────────────┐                                                                     │
+│  │  GlobalCountry  │◀────────────────────────────────────────────────────────────────┐  │
+│  └────────┬────────┘                                                                  │  │
+│           │ 1:M                                                                       │  │
+│           ▼                                                                           │  │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐   ┌──────────────┐│  │
+│  │  Country (AZ)   │    │   EuCountry     │    │   FaoCountry    │   │ FpmaCountry  ││  │
+│  └─────────────────┘    └─────────────────┘    └─────────────────┘   └──────────────┘│  │
+│                                                                                       │  │
+│  ┌─────────────────┐                                                                  │  │
+│  │  GlobalMarket   │◀───────────────────────────────────────────────────────────────┘│  │
+│  └────────┬────────┘                                                                  │  │
+│           │ 1:M                                                                       │  │
+│           ▼                                                                           │  │
+│  ┌─────────────────┐                              ┌─────────────────┐                 │  │
+│  │   Market (AZ)   │                              │   FpmaMarket    │                 │  │
+│  └─────────────────┘                              └─────────────────┘                 │  │
+│                                                                                       │  │
+│  ┌─────────────────┐                                                                  │  │
+│  │ GlobalPriceStage│◀────────────────────────────────────────────────────────────────┐  │
+│  └────────┬────────┘                                                                  │  │
+│           │ 1:M                                                                       │  │
+│           ▼                                                                           │  │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐                    │  │
+│  │  MarketType(AZ) │    │   EuPrice.stage │    │  FpmaSerie      │                    │  │
+│  └─────────────────┘    └─────────────────┘    └─────────────────┘                    │  │
+│                                                                                       │  │
+│  ┌─────────────────┐                                                                  │  │
+│  │ GlobalCategory  │                                                                  │  │
+│  └────────┬────────┘                                                                  │  │
+│           │ 1:M                                                                       │  │
+│           ▼                                                                           │  │
+│  ┌─────────────────┐◀─────────────────────────────────────────────────────────────────┐  │
+│  │  GlobalProduct  │                                                                  │  │
+│  └────────┬────────┘                                                                  │  │
+│           │ 1:M                                                                       │  │
+│           ▼                                                                           │  │
+│  ┌─────────────────────┐                                                              │  │
+│  │GlobalProductVariety │                                                              │  │
+│  └─────────┬───────────┘                                                              │  │
+│            │ 1:M                                                                      │  │
+│            ▼                                                                          │  │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐                          │  │
+│  │ProductType│  │EuProduct │  │FaoProduct│  │FpmaCommodity │                          │  │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────────┘                          │  │
+│                                                                                       │  │
+└───────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. Azerbaijan Entities
+## 5. Relationships Summary
 
-### 3.1 Country
+### Global → Source Mappings
 
-Scopes all AZ data. Currently seeded with `AZ` (Azerbaijan).
-
-```prisma
-model Country {
-  id        String   @id @default(cuid())
-  iso2      String   @unique
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  marketTypes  MarketType[]
-  markets      Market[]
-  categories   Category[]
-  products     Product[]
-  prices       Price[]
-}
-```
-
-**Seeded Data:**
-- AZ: Azərbaycan
+| Global Entity | AZ | EU | FAO | FPMA |
+|--------------|-----|-----|-----|------|
+| GlobalCountry | Country | EuCountry | FaoCountry | FpmaCountry |
+| GlobalProduct | Product | EuProduct | FaoProduct | FpmaCommodity |
+| GlobalProductVariety | ProductType | EuProduct | FaoProduct | FpmaCommodity |
+| GlobalPriceStage | MarketType | EuPrice.priceStage | FaoPrice | FpmaSerie |
+| GlobalMarket | Market | - | - | FpmaMarket |
+| GlobalCategory | Category | - | - | - |
 
 ---
 
-### 3.2 MarketType
+## 6. Data Statistics (Current)
 
-Fixed categories of markets (4 types).
-
-```prisma
-model MarketType {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  nameAz    String
-  nameEn    String?
-  nameRu    String?
-  countryId String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  country   Country  @relation(fields: [countryId], references: [id])
-  markets   Market[]
-}
-```
-
-| Code | Name (AZ) | EU Equivalent |
-|------|-----------|---------------|
-| WHOLESALE | Topdansatış | WHOLESALE / EX_PACKAGING |
-| PROCESSING | Müəssisə tərəfindən alış | PRODUCER |
-| RETAIL | Pərakəndə satış | RETAIL_SELLING |
-| FIELD | Sahədən satış | PRODUCER |
+| Entity | Count |
+|--------|-------|
+| GlobalCountry | 249 |
+| GlobalProduct | 97 |
+| GlobalProductVariety | 485 |
+| GlobalCategory | 10 |
+| GlobalPriceStage | 4 |
+| GlobalMarket | 50+ |
+| AZ Products | 65 |
+| AZ ProductTypes | 372 |
+| EU Products | 65 |
+| FAO Products | 45 |
+| FPMA Commodities | 147 |
 
 ---
 
-### 3.3 Market
-
-Physical trading locations.
-
-```prisma
-model Market {
-  id           String   @id @default(cuid())
-  name         String
-  nameEn       String?
-  nameRu       String?
-  aliases      String?
-  countryId    String
-  marketTypeId String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  country      Country    @relation(fields: [countryId], references: [id])
-  marketType   MarketType @relation(fields: [marketTypeId], references: [id], onDelete: Cascade)
-  prices       Price[]
-
-  @@unique([name, marketTypeId, countryId])
-}
-```
-
----
-
-### 3.4 Product
-
-AZ agricultural products linked to GlobalProduct.
-
-```prisma
-model Product {
-  id              String   @id @default(cuid())
-  name            String
-  nameEn          String?
-  nameRu          String?
-  slug            String
-  aliases         String?
-  hsCode          String?
-  unit            String   @default("kg")
-  countryId       String
-  categoryId      String
-  globalProductId String?  @map("global_product_id")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  country       Country        @relation(fields: [countryId], references: [id])
-  category      Category       @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  globalProduct GlobalProduct? @relation(fields: [globalProductId], references: [id])
-  productTypes  ProductType[]
-  prices        Price[]
-
-  @@unique([countryId, slug])
-}
-```
-
----
-
-### 3.5 Price
-
-Core fact table for AZ price observations.
-
-```prisma
-model Price {
-  id            String    @id @default(cuid())
-  countryId     String
-  productId     String
-  productTypeId String?
-  marketId      String
-  date          DateTime
-  priceMin      Decimal
-  priceAvg      Decimal
-  priceMax      Decimal
-  unit          String
-  currency      String    @default("AZN")
-  source        String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  country       Country      @relation(fields: [countryId], references: [id])
-  product       Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
-  productType   ProductType? @relation(fields: [productTypeId], references: [id], onDelete: Cascade)
-  market        Market       @relation(fields: [marketId], references: [id], onDelete: Cascade)
-
-  @@unique([countryId, productId, productTypeId, marketId, date])
-  @@index([productId, date])
-  @@index([marketId, date])
-  @@index([productId, marketId, date])
-}
-```
-
----
-
-### 3.6 AzPriceAggregate
-
-Weekly/monthly average prices by market type for comparison.
-
-```prisma
-model AzPriceAggregate {
-  id            String   @id @default(cuid())
-  productId     String   @map("product_id")
-  productTypeId String?  @map("product_type_id")
-  marketTypeCode String  @map("market_type_code") // RETAIL, WHOLESALE, etc.
-  countryId     String   @map("country_id")
-  year          Int
-  week          Int      // ISO week number (1-53)
-  avgPrice      Decimal  @map("avg_price")
-  minPrice      Decimal  @map("min_price")
-  maxPrice      Decimal  @map("max_price")
-  recordCount   Int      @map("record_count")
-  unit          String   @default("kg")
-  currency      String   @default("AZN")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@unique([productId, productTypeId, marketTypeCode, countryId, year, week])
-  @@index([productId, marketTypeCode])
-  @@index([year, week])
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| marketTypeCode | String | RETAIL, WHOLESALE, PROCESSING, FIELD |
-| year | Int | Calendar year |
-| week | Int | ISO week number (1-53) |
-| avgPrice | Decimal | Average price for the week |
-| recordCount | Int | Number of price records aggregated |
-
----
-
-## 4. European Union Entities
-
-### 4.1 EuCountry
-
-EU member states (27 countries).
-
-```prisma
-model EuCountry {
-  id           String   @id @default(cuid())
-  iso2         String   @unique // BE, DE, FR...
-  nameEn       String   @map("name_en")
-  nameAz       String?  @map("name_az")
-  eurostatCode String?  @map("eurostat_code")
-  region       String?  // Western Europe, Eastern Europe, etc.
-  population   Int?
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  products     EuProduct[]
-  prices       EuPrice[]
-}
-```
-
-| ISO2 | Name (EN) | Name (AZ) | Region |
-|------|-----------|-----------|--------|
-| BE | Belgium | Belçika | Western Europe |
-| DE | Germany | Almaniya | Western Europe |
-| FR | France | Fransa | Western Europe |
-| IT | Italy | İtaliya | Southern Europe |
-| ES | Spain | İspaniya | Southern Europe |
-| PL | Poland | Polşa | Eastern Europe |
-
----
-
-### 4.2 EuProduct
-
-EU agricultural products linked to GlobalProduct.
-
-```prisma
-model EuProduct {
-  id              String   @id @default(cuid())
-  eurostatCode    String   @map("eurostat_code") // A.1.1.1, etc.
-  nameEn          String   @map("name_en")
-  nameAz          String?  @map("name_az")
-  category        String?
-  unit            String   @default("EUR/100kg")
-  globalProductId String?  @map("global_product_id")
-  isActive        Boolean  @default(true) @map("is_active")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  globalProduct   GlobalProduct? @relation(fields: [globalProductId], references: [id])
-  prices          EuPrice[]
-
-  @@index([eurostatCode])
-  @@index([globalProductId])
-}
-```
-
----
-
-### 4.3 EuPrice
-
-EU price observations from Eurostat and EC Agrifood.
-
-```prisma
-model EuPrice {
-  id          String   @id @default(cuid())
-  euCountryId String   @map("eu_country_id")
-  euProductId String   @map("eu_product_id")
-  year        Int
-  week        Int?     // For EC Agrifood weekly data
-  price       Decimal
-  unit        String   @default("EUR/100kg")
-  currency    String   @default("EUR")
-  priceStage  String?  @map("price_stage") // PRODUCER, RETAIL_SELLING, WHOLESALE
-  source      String   // eurostat, ec_agrifood
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  euCountry   EuCountry @relation(fields: [euCountryId], references: [id])
-  euProduct   EuProduct @relation(fields: [euProductId], references: [id])
-
-  @@unique([euCountryId, euProductId, year, week, priceStage])
-  @@index([euProductId, year])
-  @@index([euCountryId, year])
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| year | Int | Data year (2020-2025) |
-| week | Int? | Week number for EC Agrifood data |
-| priceStage | String? | PRODUCER, RETAIL_SELLING, WHOLESALE, EX_PACKAGING |
-| source | String | eurostat or ec_agrifood |
-
----
-
-## 5. Entity Relationship Diagram
-
-```
-┌────────────────────────────────────────────────────────────────────────────┐
-│                                                                             │
-│  ┌───────────────┐                              ┌───────────────┐          │
-│  │ GlobalProduct │◀─────────────────────────────│   EuProduct   │          │
-│  └───────┬───────┘         1:M                  └───────┬───────┘          │
-│          │                                              │                   │
-│          │ 1:M                                          │ 1:M              │
-│          ▼                                              ▼                   │
-│  ┌───────────────┐                              ┌───────────────┐          │
-│  │    Product    │                              │    EuPrice    │◀────┐    │
-│  └───────┬───────┘                              └───────────────┘     │    │
-│          │                                                            │    │
-│          │ 1:M                                                        │    │
-│          ▼                                                            │    │
-│  ┌───────────────┐                              ┌───────────────┐     │    │
-│  │  ProductType  │                              │   EuCountry   │─────┘    │
-│  └───────┬───────┘                              └───────────────┘   1:M    │
-│          │                                                                  │
-│          │                                                                  │
-│          ▼                                                                  │
-│  ┌───────────────┐       ┌───────────────┐       ┌───────────────┐         │
-│  │     Price     │◀──────│    Market     │◀──────│  MarketType   │         │
-│  └───────────────┘  M:1  └───────────────┘  M:1  └───────────────┘         │
-│          ▲                      ▲                       ▲                   │
-│          │                      │                       │                   │
-│          └──────────────────────┴───────────────────────┘                   │
-│                                  │                                          │
-│                                  ▼                                          │
-│                          ┌───────────────┐                                  │
-│                          │    Country    │                                  │
-│                          └───────────────┘                                  │
-│                                                                             │
-│  ┌────────────────────┐    ┌───────────────┐    ┌───────────────┐          │
-│  │  AzPriceAggregate  │    │    Currency   │    │     Unit      │          │
-│  └────────────────────┘    └───────────────┘    └───────────────┘          │
-│                                                                             │
-└────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 6. Relationships Summary
-
-### AZ Entities
-
-| From | To | Type | Description |
-|------|-----|------|-------------|
-| Country | MarketType | 1:M | Country has many market types |
-| Country | Market | 1:M | Country has many markets |
-| Country | Category | 1:M | Country has many categories |
-| Country | Product | 1:M | Country has many products |
-| MarketType | Market | 1:M | Market type has many markets |
-| Category | Product | 1:M | Category has many products |
-| Product | ProductType | 1:M | Product has many types |
-| Product | Price | 1:M | Product has many prices |
-| Market | Price | 1:M | Market has many prices |
-| GlobalProduct | Product | 1:M | GlobalProduct links to AZ products |
-
-### EU Entities
-
-| From | To | Type | Description |
-|------|-----|------|-------------|
-| EuCountry | EuPrice | 1:M | EU country has many prices |
-| EuProduct | EuPrice | 1:M | EU product has many prices |
-| GlobalProduct | EuProduct | 1:M | GlobalProduct links to EU products |
-
----
-
-## 7. Cascade Delete Rules
-
-| Parent | Child | On Delete |
-|--------|-------|-----------|
-| Category | Product | CASCADE |
-| Product | ProductType | CASCADE |
-| Product | Price | CASCADE |
-| ProductType | Price | CASCADE |
-| Market | Price | CASCADE |
-| MarketType | Market | CASCADE |
-| EuProduct | EuPrice | CASCADE |
-
----
-
-## 8. Data Sources
-
-| Source | Model | Frequency | Fields |
-|--------|-------|-----------|--------|
-| agro.gov.az | Price | Weekly | priceMin, priceAvg, priceMax |
-| Eurostat | EuPrice | Yearly | price (annual average) |
-| EC Agrifood | EuPrice | Weekly | price (weekly) |
-| ExchangeRate-API | Currency | Daily | 166+ world currencies (USD-based) |
-
----
-
-## 9. Database Commands
+## 7. Database Commands
 
 ### Development
 
@@ -575,33 +475,26 @@ npm run db:seed
 npm run db:studio
 ```
 
-### Production
-
-```bash
-# Create migration
-npx prisma migrate dev --name description
-
-# Apply migrations
-npx prisma migrate deploy
-```
-
-### Custom Scripts
+### Scripts
 
 ```bash
 # Seed EU data
 npx tsx scripts/seed-eu-data.ts
 
+# Seed FAO data
+npx tsx scripts/seed-fao-data.ts
+
+# Seed FPMA data
+npx tsx scripts/seed-fpma-data.ts
+
+# Seed global countries
+npx tsx scripts/seed-global-countries.ts
+
+# Seed base varieties
+npx tsx scripts/seed-base-varieties.ts
+
 # Calculate AZ aggregates
 npx tsx scripts/calculate-az-aggregates.ts
-
-# Seed product content
-npx tsx scripts/seed-product-content.ts
-
-# Fetch product images
-npx tsx scripts/fetch-product-images.ts
-
-# Seed units
-npx tsx scripts/seed-units.ts
 
 # Update currencies
 npx tsx scripts/update-currencies.ts
@@ -609,108 +502,44 @@ npx tsx scripts/update-currencies.ts
 
 ---
 
-## 10. Query Examples
+## 8. Currency Conversion Logic
 
-### Get Product with Prices (AZ)
+The system uses **USD as the base currency**.
+
+### Converting between currencies:
 
 ```typescript
-const product = await prisma.product.findFirst({
-  where: { slug: "apple" },
-  include: {
-    category: true,
-    productTypes: true,
-    globalProduct: true,
-    prices: {
-      orderBy: { date: "desc" },
-      take: 100,
-      include: { market: { include: { marketType: true } } }
-    }
-  }
-});
+// Price in source currency → USD → target currency
+const priceInUSD = priceInSource / sourceCurrency.rateToUSD;
+const priceInTarget = priceInUSD * targetCurrency.rateToUSD;
 ```
 
-### Get EU Product Prices
+### Example:
 
 ```typescript
-const euPrices = await prisma.euPrice.findMany({
-  where: {
-    euProduct: { globalProductId: globalProductId },
-    euCountryId: euCountryId,
-    year: { gte: 2020 }
-  },
-  orderBy: { year: "desc" },
-  include: {
-    euCountry: true,
-    euProduct: true
-  }
-});
-```
+// Convert 100 EUR to AZN
+// EUR rateToUSD = 0.92 (1 USD = 0.92 EUR)
+// AZN rateToUSD = 1.70 (1 USD = 1.70 AZN)
 
-### Get AZ Aggregate for Comparison
-
-```typescript
-const azAggregate = await prisma.azPriceAggregate.findMany({
-  where: {
-    productId: productId,
-    marketTypeCode: "RETAIL",
-    year: { gte: 2023 }
-  },
-  orderBy: [{ year: "desc" }, { week: "desc" }],
-  take: 52 // Last year of weekly data
-});
-```
-
-### Currency Conversion
-
-```typescript
-const currencies = await prisma.currency.findMany({
-  where: { isActive: true },
-  orderBy: { code: "asc" }
-});
-
-// Convert price from TRY to EUR (via USD)
-const priceInUSD = priceInTRY / tryCurrency.rateToUSD;  // TRY → USD
-const priceInEUR = priceInUSD * eurCurrency.rateToUSD;  // USD → EUR
-```
-
-### Unit Conversion
-
-```typescript
-const units = await prisma.unit.findMany({
-  where: { isActive: true },
-  orderBy: { sortOrder: "asc" }
-});
-
-// Convert price from EUR/100kg to EUR/kg
-const pricePerKg = pricePerHundredKg / 100;
-
-// Convert price from kg to lb
-const pricePerLb = pricePerKg * 0.453592;
+const priceInUSD = 100 / 0.92;  // 108.70 USD
+const priceInAZN = 108.70 * 1.70; // 184.78 AZN
 ```
 
 ---
 
-## 11. Performance Considerations
+## 9. Performance Indexes
 
-### Indexes
-- All foreign keys are indexed by default
-- Custom indexes on (productId, date), (marketId, date)
-- Custom indexes on (euProductId, year), (euCountryId, year)
-- Composite unique constraints provide indexes
-
-### Query Optimization
-- Use `select` to limit fields returned
-- Use pagination with `skip` and `take`
-- Avoid N+1 queries with `include`
-- Pre-calculate aggregates in `AzPriceAggregate`
-
-### Caching Considerations
-- Cache exchange rates (update 4x daily)
-- Cache product metadata (low change frequency)
-- Cache filter options per product
+| Table | Index |
+|-------|-------|
+| prices | (productId, date), (marketId, date), (date) |
+| eu_prices | (euProductId, year), (euCountryId, year) |
+| fpma_prices | (serieId, date), (date) |
+| global_products | (globalCategoryId), (category) |
+| global_product_varieties | (globalProductId), (fpmaVarietyCode) |
+| global_countries | (region), (subRegion) |
 
 ---
 
 **Document End**
 
-*Last Updated: January 2, 2026 - Added GlobalProduct, EuCountry, EuProduct, EuPrice, AzPriceAggregate, Currency, Unit models*
+*Last Updated: January 4, 2026 - Added GlobalProductVariety, GlobalCountry, GlobalPriceStage, GlobalMarket, GlobalCategory models. Updated currency to USD-based system.*
