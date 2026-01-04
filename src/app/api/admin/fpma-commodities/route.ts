@@ -20,6 +20,10 @@ export async function GET(request: NextRequest) {
         baseCode: true,
         varietyName: true,
         globalProductId: true,
+        globalProductVarietyId: true,
+        globalProductVariety: {
+          select: { id: true, nameEn: true, nameAz: true }
+        },
       },
       orderBy: { nameEn: "asc" },
     });
@@ -34,6 +38,8 @@ export async function GET(request: NextRequest) {
       baseCode: c.baseCode,
       varietyName: c.varietyName,
       globalProductId: c.globalProductId,
+      globalProductVarietyId: c.globalProductVarietyId,
+      globalProductVariety: c.globalProductVariety,
     }));
 
     return NextResponse.json({

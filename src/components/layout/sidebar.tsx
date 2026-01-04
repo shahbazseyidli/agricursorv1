@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Upload,
   Link2,
+  Tag,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -48,6 +49,7 @@ const adminNavItems = [
   { href: "/admin/upload", label: "Məlumat yüklə", icon: Upload },
   // Global bölmə
   { href: "/admin/global-products", label: "Global Məhsullar", icon: Layers },
+  { href: "/admin/global-varieties", label: "Məhsul Növləri", icon: Tag },
   { href: "/admin/global-countries", label: "Global Ölkələr", icon: Globe },
   // AZ Data
   { href: "/admin/products", label: "AZ Məhsullar", icon: Package },

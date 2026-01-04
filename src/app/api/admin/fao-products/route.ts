@@ -20,6 +20,10 @@ export async function GET(request: NextRequest) {
         cpcCode: true,
         category: true,
         globalProductId: true,
+        globalProductVarietyId: true,
+        globalProductVariety: {
+          select: { id: true, nameEn: true, nameAz: true }
+        },
       },
       orderBy: { nameEn: "asc" },
     });
@@ -35,6 +39,8 @@ export async function GET(request: NextRequest) {
       cpcCode: p.cpcCode,
       category: p.category,
       globalProductId: p.globalProductId,
+      globalProductVarietyId: p.globalProductVarietyId,
+      globalProductVariety: p.globalProductVariety,
     }));
 
     return NextResponse.json({

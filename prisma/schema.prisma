@@ -578,6 +578,8 @@ model GlobalProductVariety {
   globalProduct   GlobalProduct     @relation(fields: [globalProductId], references: [id], onDelete: Cascade)
   productTypes    ProductType[]     // Link to local AZ product types
   fpmaCommodities FpmaCommodity[]   // Link to FPMA commodities
+  euProducts      EuProduct[]       // Link to EU products
+  faoProducts     FaoProduct[]      // Link to FAO products
 
   @@unique([globalProductId, slug])
   @@index([fpmaVarietyCode])
@@ -620,6 +622,9 @@ model EuProduct {
   globalProductId String?        @map("global_product_id")
   globalProduct   GlobalProduct? @relation(fields: [globalProductId], references: [id], onDelete: SetNull)
 
+  globalProductVarietyId String?               @map("global_product_variety_id")
+  globalProductVariety   GlobalProductVariety? @relation(fields: [globalProductVarietyId], references: [id], onDelete: SetNull)
+
   localProductId String?  @map("local_product_id")
   localProduct   Product? @relation(fields: [localProductId], references: [id], onDelete: SetNull)
   matchScore     Float?   @map("match_score")
@@ -631,6 +636,7 @@ model EuProduct {
   prices EuPrice[]
 
   @@index([globalProductId])
+  @@index([globalProductVarietyId])
   @@index([localProductId])
   @@index([category])
   @@map("eu_products")
@@ -772,6 +778,10 @@ model FaoProduct {
   category        String?
   globalProductId String?        @map("global_product_id")
   globalProduct   GlobalProduct? @relation(fields: [globalProductId], references: [id], onDelete: SetNull)
+
+  globalProductVarietyId String?               @map("global_product_variety_id")
+  globalProductVariety   GlobalProductVariety? @relation(fields: [globalProductVarietyId], references: [id], onDelete: SetNull)
+
   isActive        Boolean        @default(true) @map("is_active")
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -779,6 +789,7 @@ model FaoProduct {
   prices FaoPrice[]
 
   @@index([globalProductId])
+  @@index([globalProductVarietyId])
   @@index([category])
   @@map("fao_products")
 }

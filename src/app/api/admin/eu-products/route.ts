@@ -20,7 +20,13 @@ export async function GET() {
         nameEn: true,
         nameAz: true,
         category: true,
+        eurostatCode: true,
+        ecAgrifoodCode: true,
         globalProductId: true,
+        globalProductVarietyId: true,
+        globalProductVariety: {
+          select: { id: true, nameEn: true, nameAz: true }
+        },
       },
     });
 
