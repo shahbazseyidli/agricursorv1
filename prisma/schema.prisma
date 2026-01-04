@@ -157,6 +157,7 @@ model GlobalMarket {
   // Market characteristics
   marketType      String?  @map("market_type") // PHYSICAL, NATIONAL_AVERAGE, REGIONAL
   isNationalAvg   Boolean  @default(false) @map("is_national_avg")
+  aggregationType String?  @map("aggregation_type") // WEEKLY, MONTHLY (for national averages)
   
   // Status
   isActive        Boolean  @default(true) @map("is_active")

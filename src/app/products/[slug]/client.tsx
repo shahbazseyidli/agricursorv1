@@ -89,6 +89,8 @@ interface FpmaMarket {
   name: string;
   globalMarketId?: string | null;
   countryIso3?: string;
+  isNationalAvg?: boolean;
+  aggregationType?: string | null;
 }
 
 interface ProductPageClientProps {
@@ -156,6 +158,14 @@ export function ProductPageClient({
   const isLoading = status === "loading";
   
   const [currentCountry, setCurrentCountry] = useState<string>(selectedCountry);
+  
+  // Sync currentCountry with selectedCountry prop when it changes (e.g., on navigation)
+  useEffect(() => {
+    if (selectedCountry !== currentCountry) {
+      setCurrentCountry(selectedCountry);
+    }
+  }, [selectedCountry]);
+  
   const [selectedMarketType, setSelectedMarketType] = useState<string>("");
   const [selectedMarket, setSelectedMarket] = useState<string>("");
   const [selectedProductType, setSelectedProductType] = useState<string>("");
@@ -256,8 +266,8 @@ export function ProductPageClient({
         }
       }
     }
-    // Navigate to same product with new country
-    router.push(`/products/${product.slug}?country=${countryCode.toLowerCase()}`);
+    // Navigate to same product with new country (use replace for cleaner history)
+    router.replace(`/products/${product.slug}?country=${countryCode.toLowerCase()}`);
   };
   
   // Fetch currencies and units on mount
@@ -296,8 +306,10 @@ export function ProductPageClient({
   // Müqayisə üçün ikinci bazar seçimi (filter kimi)
   const [compareMarket, setCompareMarket] = useState<string>("");
 
-  // Fetch data with all filters
+  // Fetch data with all filters (with AbortController to prevent race conditions)
   useEffect(() => {
+    const controller = new AbortController();
+    
     async function fetchPrices() {
       setLoading(true);
       try {
@@ -351,19 +363,23 @@ export function ProductPageClient({
           params.append("dataSource", selectedDataSource);
         }
 
-        // Add price stage parameter for FPMA/FAO/EU
+        // Add price stage parameter for GlobalPriceStage
         if (selectedPriceStage) {
           params.append("priceStage", selectedPriceStage);
         }
 
-        // Add FPMA market parameter
-        if (selectedFpmaMarket && selectedFpmaMarket !== "national_avg" && selectedFpmaMarket !== "national_avg_monthly" && selectedFpmaMarket !== "national_avg_weekly") {
-          params.append("fpmaMarket", selectedFpmaMarket);
+        // Add GlobalMarket parameter (for both FPMA and AZ National Average)
+        if (selectedFpmaMarket) {
+          params.append("globalMarket", selectedFpmaMarket);
         }
 
         const res = await fetch(
-          `/api/products/${product.slug}/prices?${params.toString()}`
+          `/api/products/${product.slug}/prices?${params.toString()}`,
+          { signal: controller.signal }
         );
+        
+        if (controller.signal.aborted) return;
+        
         const data = await res.json();
         setChartData(data.data || []);
         setComparisonData(data.comparisonData || []);
@@ -390,22 +406,28 @@ export function ProductPageClient({
           }
         }
 
-        // Auto-select product type with most data (son 1 ayda ən çox qiymət olan)
+        // Auto-select product type with most data
         if (!selectedProductType && data.filters?.productTypes?.length > 0) {
           const typesWithData = data.filters.productTypes.filter((pt: any) => pt.hasData);
           if (typesWithData.length > 0) {
-            // İlk data olan növü seç
             setSelectedProductType(typesWithData[0].id);
           }
         }
-      } catch (error) {
+      } catch (error: any) {
+        // Ignore abort errors
+        if (error.name === "AbortError") return;
         console.error("Error fetching prices:", error);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     }
 
     fetchPrices();
+    
+    // Cleanup: abort previous request when dependencies change
+    return () => controller.abort();
   }, [product.slug, selectedMarket, selectedMarketType, selectedProductType, dateRange, compareMarket, customStartYear, customStartMonth, customEndYear, customEndMonth, selectedCurrency, selectedUnit, isGuest, currentCountry, selectedDataSource, selectedPriceStage, selectedFpmaMarket]);
 
   // Auto-select first market when market type changes
@@ -884,26 +906,25 @@ export function ProductPageClient({
                 )}
 
                 {/* GlobalMarket Filter - for all data sources */}
-                <Select
-                  value={selectedFpmaMarket || (availableFpmaMarkets.find((m: any) => m.isNationalAvg)?.id || "national_avg")}
-                  onValueChange={(v) => setSelectedFpmaMarket(v === "national_avg" ? "" : v)}
-                >
-                  <SelectTrigger className="w-48">
-                    <MapPin className="w-4 h-4 mr-2 text-slate-400" />
-                    <SelectValue placeholder="Bazar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableFpmaMarkets.length > 0 ? (
-                      availableFpmaMarkets.map((market: any) => (
+                {availableFpmaMarkets.length > 0 && (
+                  <Select
+                    value={selectedFpmaMarket || availableFpmaMarkets.find((m: any) => m.isNationalAvg)?.id || availableFpmaMarkets[0]?.id || ""}
+                    onValueChange={(v) => setSelectedFpmaMarket(v)}
+                  >
+                    <SelectTrigger className="w-52">
+                      <MapPin className="w-4 h-4 mr-2 text-slate-400" />
+                      <SelectValue placeholder="Bazar seçin" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableFpmaMarkets.map((market: any) => (
                         <SelectItem key={market.id} value={market.id}>
+                          {market.isNationalAvg && "🌍 "}
                           {market.name}
                         </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="national_avg">National Average</SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
 
                 {/* Product Type Filter - HƏMİŞƏ görünsün, "Hamısı" olmasın */}
                 {filters?.productTypes && filters.productTypes.length > 0 && (

@@ -144,11 +144,48 @@ export async function GET(
 
     // Get data source from query param
     const dataSource = searchParams.get("dataSource") || "auto";
+    
+    // Get filter params for FPMA and AZ
+    const priceStageParam = searchParams.get("priceStage"); // GlobalPriceStage code
+    const globalMarketParam = searchParams.get("globalMarket"); // GlobalMarket ID
 
     // ============================================
     // FAO FPMA DATA
     // ============================================
     if (dataSource === "FAO_FPMA" || (dataSource === "auto" && countryCode !== "AZ")) {
+      // Build FPMA series filter
+      const seriesWhere: any = {
+        country: {
+          OR: [
+            { iso2: countryCode },
+            { iso3: countryCode },
+          ]
+        }
+      };
+      
+      // Apply priceStage filter (GlobalPriceStage code)
+      if (priceStageParam) {
+        seriesWhere.globalPriceStage = {
+          code: priceStageParam
+        };
+      }
+      
+      // Apply market filter (FpmaMarket ID or GlobalMarket ID)
+      if (globalMarketParam) {
+        // First check if it's a GlobalMarket ID
+        const globalMarket = await prisma.globalMarket.findUnique({
+          where: { id: globalMarketParam },
+          include: { fpmaMarkets: true }
+        });
+        
+        if (globalMarket && globalMarket.fpmaMarkets.length > 0) {
+          seriesWhere.marketId = { in: globalMarket.fpmaMarkets.map(m => m.id) };
+        } else {
+          // Try as FpmaMarket ID directly
+          seriesWhere.marketId = globalMarketParam;
+        }
+      }
+
       // Try FPMA data first for non-AZ countries
       const globalProduct = await prisma.globalProduct.findUnique({
         where: { slug },
@@ -156,17 +193,14 @@ export async function GET(
           fpmaCommodities: {
             include: {
               series: {
-                where: {
-                  country: {
-                    OR: [
-                      { iso2: countryCode },
-                      { iso3: countryCode },
-                    ]
-                  }
-                },
+                where: seriesWhere,
                 include: {
                   country: true,
-                  market: true,
+                  market: {
+                    include: {
+                      globalMarket: true
+                    }
+                  },
                   globalPriceStage: true,
                   prices: {
                     where: {
@@ -204,18 +238,28 @@ export async function GET(
             }))
           )].map(s => JSON.parse(s));
 
-          // Get unique markets by name (not ID, since same market name can exist for different commodities)
-          const marketsByName = new Map<string, { id: string; name: string; hasData: boolean }>();
+          // Get unique GlobalMarkets (via FpmaMarket -> GlobalMarket)
+          const globalMarketsByName = new Map<string, { 
+            id: string; 
+            name: string; 
+            hasData: boolean;
+            isNationalAvg: boolean;
+          }>();
           allSeries.forEach(s => {
-            if (!marketsByName.has(s.market.name)) {
-              marketsByName.set(s.market.name, {
-                id: s.market.id,
-                name: s.market.name,
-                hasData: true
+            const gm = s.market.globalMarket;
+            const marketName = gm?.name || s.market.name;
+            const marketId = gm?.id || s.market.id;
+            
+            if (!globalMarketsByName.has(marketName)) {
+              globalMarketsByName.set(marketName, {
+                id: marketId,
+                name: marketName,
+                hasData: true,
+                isNationalAvg: gm?.isNationalAvg || marketName.toLowerCase().includes('national')
               });
             }
           });
-          const uniqueMarkets = Array.from(marketsByName.values());
+          const uniqueMarkets = Array.from(globalMarketsByName.values());
 
           // Format for chart - normalize all prices to per kg
           const chartData = allPrices.map(p => {
@@ -225,8 +269,8 @@ export async function GET(
               priceMin: normalizedPrice,
               priceAvg: normalizedPrice,
               priceMax: normalizedPrice,
-              market: p.market.name,
-              marketId: p.market.id,
+              market: p.market.globalMarket?.name || p.market.name,
+              marketId: p.market.globalMarket?.id || p.market.id,
               marketType: p.priceType,
               priceStage: p.globalPriceStage?.code,
               priceUsd: p.priceUsd,
@@ -247,7 +291,7 @@ export async function GET(
             date: latestPriceData.date,
             currency: latestPriceData.currency,
             currencySymbol: latestPriceData.currency,
-            market: latestPriceData.market.name,
+            market: latestPriceData.market.globalMarket?.name || latestPriceData.market.name,
             marketType: latestPriceData.priceType,
           } : null;
 
@@ -267,8 +311,16 @@ export async function GET(
             };
           }
 
-          // Country info
+          // Get country info from GlobalCountry
           const fpmaCountry = allSeries[0]?.country;
+          const globalCountry = fpmaCountry ? await prisma.globalCountry.findFirst({
+            where: {
+              OR: [
+                { iso2: fpmaCountry.iso2 || "" },
+                { iso3: fpmaCountry.iso3 }
+              ]
+            }
+          }) : null;
 
           return NextResponse.json({
             data: chartData,
@@ -296,8 +348,10 @@ export async function GET(
                 fxRate: 1
               },
               country: {
-                code: countryCode,
-                name: fpmaCountry?.nameEn || countryCode
+                code: globalCountry?.iso2 || countryCode,
+                iso3: globalCountry?.iso3 || fpmaCountry?.iso3,
+                name: globalCountry?.nameAz || globalCountry?.nameEn || fpmaCountry?.nameEn || countryCode,
+                flag: globalCountry?.flagEmoji
               },
               source: "FAO_FPMA"
             },
@@ -307,6 +361,16 @@ export async function GET(
       
       // If FPMA data not found and dataSource was explicitly FAO_FPMA, return empty
       if (dataSource === "FAO_FPMA") {
+        // Get country info for empty response
+        const globalCountry = await prisma.globalCountry.findFirst({
+          where: {
+            OR: [
+              { iso2: countryCode },
+              { iso3: countryCode }
+            ]
+          }
+        });
+        
         return NextResponse.json({
           data: [],
           comparisonData: [],
@@ -320,7 +384,12 @@ export async function GET(
             dateRange: { from: null, to: null },
             isGuest,
             currency: { code: "USD", symbol: "$", fxRate: 1 },
-            country: { code: countryCode, name: countryCode },
+            country: { 
+              code: globalCountry?.iso2 || countryCode, 
+              iso3: globalCountry?.iso3,
+              name: globalCountry?.nameAz || globalCountry?.nameEn || countryCode,
+              flag: globalCountry?.flagEmoji
+            },
             source: "FAO_FPMA",
             noData: true
           },
@@ -570,7 +639,155 @@ export async function GET(
       );
     }
 
-    // Build where clause
+    // ============================================
+    // Check if National Average is selected (use AzPriceAggregate)
+    // ============================================
+    if (globalMarketParam) {
+      const selectedGlobalMarket = await prisma.globalMarket.findUnique({
+        where: { id: globalMarketParam }
+      });
+      
+      if (selectedGlobalMarket?.isNationalAvg && selectedGlobalMarket?.aggregationType) {
+        // Use AzPriceAggregate data
+        const periodType = selectedGlobalMarket.aggregationType; // "WEEKLY" or "MONTHLY"
+        
+        // Build aggregate query
+        const aggregateWhere: any = {
+          productId: product.id,
+          startDate: { gte: startDate },
+          periodType: periodType,
+        };
+        
+        // Apply GlobalPriceStage filter → MarketType
+        if (priceStageParam) {
+          const globalPriceStage = await prisma.globalPriceStage.findUnique({
+            where: { code: priceStageParam },
+            include: { azMarketTypes: true }
+          });
+          
+          if (globalPriceStage && globalPriceStage.azMarketTypes.length > 0) {
+            aggregateWhere.marketTypeId = { in: globalPriceStage.azMarketTypes.map(mt => mt.id) };
+          }
+        }
+        
+        if (productTypeId) {
+          aggregateWhere.productTypeId = productTypeId;
+        }
+        
+        const aggregates = await prisma.azPriceAggregate.findMany({
+          where: aggregateWhere,
+          include: {
+            marketType: true,
+            productType: true,
+          },
+          orderBy: [{ year: "asc" }, { period: "asc" }],
+        });
+        
+        // Get GlobalCountry for Azerbaijan
+        const azGlobalCountry = await prisma.globalCountry.findFirst({
+          where: { iso2: "AZ" }
+        });
+        
+        // Format aggregate data for chart
+        const chartData = aggregates.map(a => ({
+          date: a.startDate.toISOString().split("T")[0],
+          priceMin: convertPriceWithUnit(a.minPrice, fxRate, unitConversionRate),
+          priceAvg: convertPriceWithUnit(a.avgPrice, fxRate, unitConversionRate),
+          priceMax: convertPriceWithUnit(a.maxPrice, fxRate, unitConversionRate),
+          market: selectedGlobalMarket.nameAz || selectedGlobalMarket.name,
+          marketId: selectedGlobalMarket.id,
+          marketType: a.marketType.nameAz,
+          marketTypeId: a.marketTypeId,
+          productType: a.productType?.name || null,
+          productTypeId: a.productTypeId,
+          periodType: a.periodType,
+          period: a.period,
+          year: a.year,
+        }));
+        
+        // Latest aggregate price
+        const latestAggregate = aggregates[aggregates.length - 1];
+        
+        // Get market types for filters
+        const marketTypes = await prisma.marketType.findMany({
+          where: { countryId: product.countryId },
+          include: { globalPriceStage: true }
+        });
+        
+        const marketTypesWithAvailability = marketTypes.map(mt => ({
+          id: mt.id,
+          code: mt.code,
+          name: mt.nameAz,
+          hasData: true,
+          globalPriceStageId: mt.globalPriceStageId,
+          globalPriceStageCode: mt.globalPriceStage?.code
+        }));
+        
+        // Get GlobalMarkets for AZ
+        const azGlobalMarkets = await prisma.globalMarket.findMany({
+          where: { 
+            globalCountry: { iso2: "AZ" }
+          },
+          orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+        });
+        
+        const marketsWithAvailability = azGlobalMarkets.map(gm => ({
+          id: gm.id,
+          name: gm.nameAz || gm.name,
+          hasData: true,
+          isNationalAvg: gm.isNationalAvg,
+          aggregationType: gm.aggregationType
+        }));
+        
+        return NextResponse.json({
+          data: chartData,
+          comparisonData: [],
+          filters: {
+            marketTypes: marketTypesWithAvailability,
+            markets: marketsWithAvailability,
+            productTypes: product.productTypes.map(pt => ({
+              id: pt.id,
+              name: pt.name,
+              hasData: true
+            })),
+            priceStages: marketTypesWithAvailability
+          },
+          stats: {
+            latestPrice: latestAggregate ? {
+              priceMin: convertPriceWithUnit(latestAggregate.minPrice, fxRate, unitConversionRate),
+              priceAvg: convertPriceWithUnit(latestAggregate.avgPrice, fxRate, unitConversionRate),
+              priceMax: convertPriceWithUnit(latestAggregate.maxPrice, fxRate, unitConversionRate),
+              date: latestAggregate.startDate,
+              currency: targetCurrency,
+              currencySymbol,
+              market: selectedGlobalMarket.nameAz || selectedGlobalMarket.name,
+              marketType: latestAggregate.marketType.nameAz,
+            } : null,
+            priceChange: null,
+            totalRecords: aggregates.length,
+            marketTypeStats: [],
+            priceChanges: {},
+            dateRange: {
+              from: aggregates[0]?.startDate,
+              to: aggregates[aggregates.length - 1]?.endDate
+            },
+            isGuest,
+            currency: { code: targetCurrency, symbol: currencySymbol, fxRate },
+            unit: { code: targetUnit, conversionRate: unitConversionRate },
+            country: {
+              code: "AZ",
+              iso3: "AZE",
+              name: azGlobalCountry?.nameAz || "Azərbaycan",
+              flag: azGlobalCountry?.flagEmoji || "🇦🇿"
+            },
+            source: "AGRO_AZ",
+            aggregationType: periodType
+          },
+        });
+      }
+    }
+
+    // Build where clause for regular AZ price data
     const where: any = {
       productId: product.id,
       date: { 
@@ -578,6 +795,36 @@ export async function GET(
         ...(range === "custom" ? { lte: endDate } : {})
       },
     };
+
+    // Apply GlobalPriceStage filter → MarketType
+    if (priceStageParam) {
+      const globalPriceStage = await prisma.globalPriceStage.findUnique({
+        where: { code: priceStageParam },
+        include: { azMarketTypes: true }
+      });
+      
+      if (globalPriceStage && globalPriceStage.azMarketTypes.length > 0) {
+        const azMarketTypeIds = globalPriceStage.azMarketTypes.map(mt => mt.id);
+        // Get markets with these market types
+        const azMarketsForType = await prisma.market.findMany({
+          where: { marketTypeId: { in: azMarketTypeIds } },
+          select: { id: true }
+        });
+        where.marketId = { in: azMarketsForType.map(m => m.id) };
+      }
+    }
+    
+    // Apply GlobalMarket filter → AZ Market
+    if (globalMarketParam && !priceStageParam) {
+      const selectedGlobalMarket = await prisma.globalMarket.findUnique({
+        where: { id: globalMarketParam },
+        include: { azMarkets: true }
+      });
+      
+      if (selectedGlobalMarket && selectedGlobalMarket.azMarkets.length > 0) {
+        where.marketId = { in: selectedGlobalMarket.azMarkets.map(m => m.id) };
+      }
+    }
 
     if (marketId) {
       where.marketId = marketId;
@@ -906,9 +1153,11 @@ export async function GET(
         },
         country: {
           code: "AZ",
-          name: "Azərbaycan"
+          iso3: "AZE",
+          name: "Azərbaycan",
+          flag: "🇦🇿"
         },
-        source: "AZ_DATA"
+        source: "AGRO_AZ"
       },
     });
   } catch (error) {
