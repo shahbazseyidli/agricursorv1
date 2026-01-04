@@ -41,7 +41,6 @@ import {
   RefreshCw,
   ExternalLink,
   Link2,
-  Unlink,
   Plus,
   Layers,
   AlertCircle,
@@ -124,6 +123,7 @@ interface Pagination {
 
 export default function GlobalProductsPage() {
   const [products, setProducts] = useState<GlobalProduct[]>([]);
+  const [allGlobalProducts, setAllGlobalProducts] = useState<GlobalProduct[]>([]); // For mapping sections
   const [categories, setCategories] = useState<GlobalCategory[]>([]);
   const [euProducts, setEuProducts] = useState<EuProduct[]>([]);
   const [azProducts, setAzProducts] = useState<AzProduct[]>([]);
@@ -152,8 +152,15 @@ export default function GlobalProductsPage() {
     image: "",
   });
 
+  // Edit link dialog state
+  const [editLinkItem, setEditLinkItem] = useState<{id: string; name: string; code: string; globalProductId: string | null} | null>(null);
+  const [editLinkType, setEditLinkType] = useState<"az" | "eu" | "fpma" | "fao" | null>(null);
+  const [showEditLinkDialog, setShowEditLinkDialog] = useState(false);
+  const [selectedGlobalProductId, setSelectedGlobalProductId] = useState<string>("");
+
   // Fetch all data on mount
   useEffect(() => {
+    fetchAllGlobalProducts();
     fetchCategories();
     fetchEuProducts();
     fetchAzProducts();
@@ -165,6 +172,21 @@ export default function GlobalProductsPage() {
   useEffect(() => {
     fetchProducts();
   }, [searchQuery, selectedCategoryId, currentPage]);
+
+  // Fetch ALL global products (without pagination) for mapping sections
+  async function fetchAllGlobalProducts() {
+    try {
+      const res = await fetch("/api/admin/global-products?limit=500");
+      const data = await res.json();
+      if (data.success) {
+        setAllGlobalProducts(data.data);
+      } else if (data.products) {
+        setAllGlobalProducts(data.products);
+      }
+    } catch (error) {
+      console.error("Error fetching all global products:", error);
+    }
+  }
 
   async function fetchProducts() {
     setLoading(true);
@@ -315,6 +337,55 @@ export default function GlobalProductsPage() {
     }
     setTimeout(() => { setSuccess(""); setError(""); }, 3000);
   }
+
+  function openEditLinkDialog(item: {id: string; name: string; code: string; globalProductId: string | null}, type: "az" | "eu" | "fpma" | "fao") {
+    setEditLinkItem(item);
+    setEditLinkType(type);
+    setSelectedGlobalProductId(item.globalProductId || "");
+    setShowEditLinkDialog(true);
+  }
+
+  async function handleSaveLink() {
+    if (!editLinkItem || !editLinkType) return;
+    
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/link-product", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceId: editLinkItem.id,
+          globalProductId: selectedGlobalProductId || null,
+          type: editLinkType,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSuccess("Əlaqə uğurla yeniləndi");
+        setShowEditLinkDialog(false);
+        setEditLinkItem(null);
+        if (editLinkType === "eu") fetchEuProducts();
+        else if (editLinkType === "az") fetchAzProducts();
+        else if (editLinkType === "fpma") fetchFpmaCommodities();
+        else if (editLinkType === "fao") fetchFaoProducts();
+        fetchProducts();
+        fetchAllGlobalProducts();
+      } else {
+        setError(data.error || "Xəta baş verdi");
+      }
+    } catch (error) {
+      setError("Server xətası");
+    } finally {
+      setSaving(false);
+    }
+    setTimeout(() => { setSuccess(""); setError(""); }, 3000);
+  }
+
+  // Get global product by ID for display
+  const getGlobalProduct = (id: string | null) => {
+    if (!id) return null;
+    return allGlobalProducts.find(gp => gp.id === id);
+  };
 
   async function handleSave() {
     if (!editingProduct) return;
@@ -565,6 +636,56 @@ export default function GlobalProductsPage() {
             <Button onClick={handleCreate} disabled={saving || !newProduct.slug || !newProduct.nameEn}>
               <Plus className="w-4 h-4 mr-1" />
               {saving ? "Yaradılır..." : "Yarat"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Link Dialog */}
+      <Dialog open={showEditLinkDialog} onOpenChange={setShowEditLinkDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Məhsul Əlaqəsini Redaktə Et</DialogTitle>
+            <DialogDescription>
+              {editLinkItem?.name} ({editLinkType?.toUpperCase()}) - Global məhsula bağlayın və ya əlaqəni silin.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <div className="space-y-4">
+              <div>
+                <Label>Mənbə Məhsul</Label>
+                <div className="mt-1 p-3 bg-slate-100 rounded-lg">
+                  <p className="font-medium">{editLinkItem?.name}</p>
+                  {editLinkItem?.code && <p className="text-sm text-slate-500">Kod: {editLinkItem.code}</p>}
+                </div>
+              </div>
+              
+              <div>
+                <Label>Global Məhsula Bağla</Label>
+                <Select value={selectedGlobalProductId} onValueChange={setSelectedGlobalProductId}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Global məhsul seçin..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">❌ Əlaqəni sil</SelectItem>
+                    {allGlobalProducts.map((gp) => (
+                      <SelectItem key={gp.id} value={gp.id}>
+                        {gp.nameAz || gp.nameEn} ({gp.slug})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditLinkDialog(false)}>
+              <X className="w-4 h-4 mr-1" /> Ləğv et
+            </Button>
+            <Button onClick={handleSaveLink} disabled={saving}>
+              <Save className="w-4 h-4 mr-1" /> {saving ? "Saxlanılır..." : "Saxla"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -949,68 +1070,48 @@ export default function GlobalProductsPage() {
         {/* AZ Mapping Tab */}
         <TabsContent value="az-mapping" className="space-y-4">
           <MappingSection
-            title="🇦🇿 Azərbaycan Məhsullarını Bağla"
+            title="🇦🇿 Azərbaycan Məhsulları"
             description="AZ məhsullarını Global məhsullara bağlayın."
-            unlinkedItems={unlinkedAzProducts.map(p => ({ id: p.id, name: p.name, code: p.slug }))}
-            linkedItems={azProducts.filter(p => p.globalProductId).map(p => ({
-              id: p.id,
-              name: p.name,
-              globalProductId: p.globalProductId!
-            }))}
-            globalProducts={products}
-            onLink={(id, gpId) => linkProduct(id, gpId, "az")}
-            onUnlink={(id) => unlinkProduct(id, "az")}
+            items={azProducts.map(p => ({ id: p.id, name: p.name, code: p.slug, globalProductId: p.globalProductId }))}
+            allGlobalProducts={allGlobalProducts}
+            getGlobalProduct={getGlobalProduct}
+            onEdit={(item) => openEditLinkDialog(item, "az")}
           />
         </TabsContent>
 
         {/* EU Mapping Tab */}
         <TabsContent value="eu-mapping" className="space-y-4">
           <MappingSection
-            title="🇪🇺 EU Məhsullarını Bağla"
+            title="🇪🇺 EU Məhsulları"
             description="Eurostat məhsullarını Global məhsullara bağlayın."
-            unlinkedItems={unlinkedEuProducts.map(p => ({ id: p.id, name: p.nameEn, code: p.category || "" }))}
-            linkedItems={euProducts.filter(p => p.globalProductId).map(p => ({
-              id: p.id,
-              name: p.nameEn,
-              globalProductId: p.globalProductId!
-            }))}
-            globalProducts={products}
-            onLink={(id, gpId) => linkProduct(id, gpId, "eu")}
-            onUnlink={(id) => unlinkProduct(id, "eu")}
+            items={euProducts.map(p => ({ id: p.id, name: p.nameEn, code: p.category || "", globalProductId: p.globalProductId }))}
+            allGlobalProducts={allGlobalProducts}
+            getGlobalProduct={getGlobalProduct}
+            onEdit={(item) => openEditLinkDialog(item, "eu")}
           />
         </TabsContent>
 
         {/* FPMA Mapping Tab */}
         <TabsContent value="fpma-mapping" className="space-y-4">
           <MappingSection
-            title="📊 FAO FPMA Commodities Bağla"
+            title="📊 FAO FPMA Commodities"
             description="FPMA commodity-lərini Global məhsullara bağlayın."
-            unlinkedItems={unlinkedFpmaCommodities.map(p => ({ id: p.id, name: p.name, code: p.code || "" }))}
-            linkedItems={fpmaCommodities.filter(p => p.globalProductId).map(p => ({
-              id: p.id,
-              name: p.name,
-              globalProductId: p.globalProductId!
-            }))}
-            globalProducts={products}
-            onLink={(id, gpId) => linkProduct(id, gpId, "fpma")}
-            onUnlink={(id) => unlinkProduct(id, "fpma")}
+            items={fpmaCommodities.map(p => ({ id: p.id, name: p.name, code: p.code || "", globalProductId: p.globalProductId }))}
+            allGlobalProducts={allGlobalProducts}
+            getGlobalProduct={getGlobalProduct}
+            onEdit={(item) => openEditLinkDialog(item, "fpma")}
           />
         </TabsContent>
 
         {/* FAO Mapping Tab */}
         <TabsContent value="fao-mapping" className="space-y-4">
           <MappingSection
-            title="🌍 FAOSTAT Məhsullarını Bağla"
+            title="🌍 FAOSTAT Məhsulları"
             description="FAO məhsullarını Global məhsullara bağlayın."
-            unlinkedItems={unlinkedFaoProducts.map(p => ({ id: p.id, name: p.itemNameEn, code: p.itemCode || "" }))}
-            linkedItems={faoProducts.filter(p => p.globalProductId).map(p => ({
-              id: p.id,
-              name: p.itemNameEn,
-              globalProductId: p.globalProductId!
-            }))}
-            globalProducts={products}
-            onLink={(id, gpId) => linkProduct(id, gpId, "fao")}
-            onUnlink={(id) => unlinkProduct(id, "fao")}
+            items={faoProducts.map(p => ({ id: p.id, name: p.itemNameEn, code: p.itemCode || "", globalProductId: p.globalProductId }))}
+            allGlobalProducts={allGlobalProducts}
+            getGlobalProduct={getGlobalProduct}
+            onEdit={(item) => openEditLinkDialog(item, "fao")}
           />
         </TabsContent>
       </Tabs>
@@ -1018,20 +1119,23 @@ export default function GlobalProductsPage() {
   );
 }
 
-// Mapping Section Component
+// Mapping Section Component with Edit functionality
 interface MappingSectionProps {
   title: string;
   description: string;
-  unlinkedItems: { id: string; name: string; code: string }[];
-  linkedItems: { id: string; name: string; globalProductId: string }[];
-  globalProducts: GlobalProduct[];
-  onLink: (id: string, globalProductId: string) => void;
-  onUnlink: (id: string) => void;
+  items: { id: string; name: string; code: string; globalProductId: string | null }[];
+  allGlobalProducts: GlobalProduct[];
+  getGlobalProduct: (id: string | null) => GlobalProduct | null | undefined;
+  onEdit: (item: { id: string; name: string; code: string; globalProductId: string | null }) => void;
 }
 
-function MappingSection({ title, description, unlinkedItems, linkedItems, globalProducts, onLink, onUnlink }: MappingSectionProps) {
+function MappingSection({ title, description, items, allGlobalProducts, getGlobalProduct, onEdit }: MappingSectionProps) {
+  const unlinkedItems = items.filter(i => !i.globalProductId);
+  const linkedItems = items.filter(i => i.globalProductId);
+
   return (
     <>
+      {/* Unlinked Items */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -1048,48 +1152,45 @@ function MappingSection({ title, description, unlinkedItems, linkedItems, global
               <p>Bütün məhsullar bağlanıb!</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Məhsul</TableHead>
-                  <TableHead>Kod</TableHead>
-                  <TableHead>Global Məhsula Bağla</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {unlinkedItems.slice(0, 50).map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item.name}</TableCell>
-                    <TableCell>
-                      {item.code && <code className="text-xs bg-slate-100 px-2 py-1 rounded">{item.code}</code>}
-                    </TableCell>
-                    <TableCell>
-                      <Select onValueChange={(value) => onLink(item.id, value)}>
-                        <SelectTrigger className="w-64">
-                          <SelectValue placeholder="Global məhsul seçin..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {globalProducts.map((gp) => (
-                            <SelectItem key={gp.id} value={gp.id}>
-                              {gp.nameAz || gp.nameEn} ({gp.slug})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
+            <>
+              <p className="text-sm font-medium text-orange-600 mb-3">Əlaqəsiz Məhsullar ({unlinkedItems.length})</p>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Məhsul</TableHead>
+                    <TableHead>Kod</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-          {unlinkedItems.length > 50 && (
-            <p className="text-sm text-slate-500 mt-2">
-              + {unlinkedItems.length - 50} daha çox əlaqəsiz məhsul var
-            </p>
+                </TableHeader>
+                <TableBody>
+                  {unlinkedItems.slice(0, 50).map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell>
+                        {item.code && <code className="text-xs bg-slate-100 px-2 py-1 rounded">{item.code}</code>}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="bg-orange-50 text-orange-700">Əlaqəsiz</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="outline" size="sm" onClick={() => onEdit(item)}>
+                          <Edit className="w-4 h-4 mr-1" /> Bağla
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {unlinkedItems.length > 50 && (
+                <p className="text-sm text-slate-500 mt-2">+ {unlinkedItems.length - 50} daha çox</p>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
 
+      {/* Linked Items */}
       {linkedItems.length > 0 && (
         <Card>
           <CardHeader>
@@ -1100,30 +1201,32 @@ function MappingSection({ title, description, unlinkedItems, linkedItems, global
               <TableHeader>
                 <TableRow>
                   <TableHead>Məhsul</TableHead>
+                  <TableHead>Kod</TableHead>
                   <TableHead>Global Məhsul</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {linkedItems.slice(0, 30).map((item) => {
-                  const gp = globalProducts.find(p => p.id === item.globalProductId);
+                {linkedItems.slice(0, 50).map((item) => {
+                  const gp = getGlobalProduct(item.globalProductId);
                   return (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.name}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
-                          {gp?.nameAz || gp?.nameEn || "N/A"}
-                        </Badge>
+                        {item.code && <code className="text-xs bg-slate-100 px-2 py-1 rounded">{item.code}</code>}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700"
-                          onClick={() => onUnlink(item.id)}
-                        >
-                          <Unlink className="w-4 h-4 mr-1" />
-                          Ayır
+                        {gp ? (
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
+                            {gp.nameAz || gp.nameEn}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-red-50 text-red-700">N/A</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="sm" onClick={() => onEdit(item)}>
+                          <Edit className="w-4 h-4 mr-1" /> Redaktə
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -1131,6 +1234,9 @@ function MappingSection({ title, description, unlinkedItems, linkedItems, global
                 })}
               </TableBody>
             </Table>
+            {linkedItems.length > 50 && (
+              <p className="text-sm text-slate-500 mt-2">+ {linkedItems.length - 50} daha çox</p>
+            )}
           </CardContent>
         </Card>
       )}

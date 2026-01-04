@@ -38,13 +38,11 @@ import {
   X,
   RefreshCw,
   Link2,
-  Unlink,
   Plus,
   MapPin,
   AlertCircle,
   ChevronLeft,
   ChevronRight,
-  Flag,
 } from "lucide-react";
 
 interface GlobalCountry {
@@ -58,7 +56,7 @@ interface GlobalCountry {
   flagEmoji: string | null;
   isActive: boolean;
   isFeatured: boolean;
-  _count: {
+  _count?: {
     azCountries: number;
     euCountries: number;
     faoCountries: number;
@@ -84,6 +82,7 @@ interface Pagination {
 
 export default function GlobalCountriesPage() {
   const [countries, setCountries] = useState<GlobalCountry[]>([]);
+  const [allGlobalCountries, setAllGlobalCountries] = useState<GlobalCountry[]>([]); // For mapping sections
   const [regions, setRegions] = useState<string[]>([]);
   const [azCountries, setAzCountries] = useState<SourceCountry[]>([]);
   const [euCountries, setEuCountries] = useState<SourceCountry[]>([]);
@@ -96,8 +95,6 @@ export default function GlobalCountriesPage() {
   const [selectedRegion, setSelectedRegion] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   
-  const [editingCountry, setEditingCountry] = useState<GlobalCountry | null>(null);
-  const [showEditDialog, setShowEditDialog] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -113,7 +110,14 @@ export default function GlobalCountriesPage() {
     flagEmoji: "",
   });
 
+  // Edit dialog state
+  const [editingItem, setEditingItem] = useState<SourceCountry | null>(null);
+  const [editingType, setEditingType] = useState<"az" | "eu" | "fpma" | "fao" | null>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [selectedGlobalCountryId, setSelectedGlobalCountryId] = useState<string>("");
+
   useEffect(() => {
+    fetchAllGlobalCountries(); // Fetch all for mapping sections
     fetchAzCountries();
     fetchEuCountries();
     fetchFpmaCountries();
@@ -123,6 +127,20 @@ export default function GlobalCountriesPage() {
   useEffect(() => {
     fetchCountries();
   }, [searchQuery, selectedRegion, currentPage]);
+
+  // Fetch ALL global countries (without pagination) for mapping sections
+  async function fetchAllGlobalCountries() {
+    try {
+      const res = await fetch("/api/admin/global-countries?limit=1000");
+      const data = await res.json();
+      if (data.success) {
+        setAllGlobalCountries(data.data);
+        setRegions(data.regions || []);
+      }
+    } catch (error) {
+      console.error("Error fetching all global countries:", error);
+    }
+  }
 
   async function fetchCountries() {
     setLoading(true);
@@ -138,7 +156,6 @@ export default function GlobalCountriesPage() {
       
       if (data.success) {
         setCountries(data.data);
-        setRegions(data.regions || []);
         setPagination(data.pagination);
       }
     } catch (error) {
@@ -189,52 +206,47 @@ export default function GlobalCountriesPage() {
     }
   }
 
-  async function linkCountry(sourceId: string, globalCountryId: string, type: "az" | "eu" | "fpma" | "fao") {
+  async function handleSaveLink() {
+    if (!editingItem || !editingType) return;
+    
+    setSaving(true);
     try {
       const res = await fetch("/api/admin/link-country", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceId, globalCountryId, type }),
+        body: JSON.stringify({
+          sourceId: editingItem.id,
+          globalCountryId: selectedGlobalCountryId || null,
+          type: editingType,
+        }),
       });
       const data = await res.json();
       if (data.success) {
-        setSuccess(`Ölkə uğurla bağlandı (${type.toUpperCase()})`);
-        if (type === "az") fetchAzCountries();
-        else if (type === "eu") fetchEuCountries();
-        else if (type === "fpma") fetchFpmaCountries();
-        else if (type === "fao") fetchFaoCountries();
+        setSuccess("Əlaqə uğurla yeniləndi");
+        setShowEditDialog(false);
+        setEditingItem(null);
+        // Refresh the appropriate list
+        if (editingType === "az") fetchAzCountries();
+        else if (editingType === "eu") fetchEuCountries();
+        else if (editingType === "fpma") fetchFpmaCountries();
+        else if (editingType === "fao") fetchFaoCountries();
         fetchCountries();
       } else {
         setError(data.error || "Xəta baş verdi");
       }
     } catch (error) {
       setError("Server xətası");
+    } finally {
+      setSaving(false);
     }
     setTimeout(() => { setSuccess(""); setError(""); }, 3000);
   }
 
-  async function unlinkCountry(sourceId: string, type: "az" | "eu" | "fpma" | "fao") {
-    try {
-      const res = await fetch("/api/admin/link-country", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceId, globalCountryId: null, type }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setSuccess("Bağlantı silindi");
-        if (type === "az") fetchAzCountries();
-        else if (type === "eu") fetchEuCountries();
-        else if (type === "fpma") fetchFpmaCountries();
-        else if (type === "fao") fetchFaoCountries();
-        fetchCountries();
-      } else {
-        setError(data.error || "Xəta baş verdi");
-      }
-    } catch (error) {
-      setError("Server xətası");
-    }
-    setTimeout(() => { setSuccess(""); setError(""); }, 3000);
+  function openEditDialog(item: SourceCountry, type: "az" | "eu" | "fpma" | "fao") {
+    setEditingItem(item);
+    setEditingType(type);
+    setSelectedGlobalCountryId(item.globalCountryId || "");
+    setShowEditDialog(true);
   }
 
   async function handleCreate() {
@@ -260,6 +272,7 @@ export default function GlobalCountriesPage() {
         setShowCreateDialog(false);
         setNewCountry({ iso2: "", iso3: "", nameEn: "", nameAz: "", region: "", flagEmoji: "" });
         fetchCountries();
+        fetchAllGlobalCountries();
       } else {
         setError(data.error || "Xəta baş verdi");
       }
@@ -276,6 +289,12 @@ export default function GlobalCountriesPage() {
   const unlinkedFpmaCountries = fpmaCountries.filter(c => !c.globalCountryId);
   const unlinkedFaoCountries = faoCountries.filter(c => !c.globalCountryId);
 
+  // Get global country by ID for display
+  const getGlobalCountry = (id: string | null) => {
+    if (!id) return null;
+    return allGlobalCountries.find(gc => gc.id === id);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -291,7 +310,7 @@ export default function GlobalCountriesPage() {
             <Plus className="w-4 h-4 mr-2" />
             Yeni Ölkə
           </Button>
-          <Button onClick={() => { fetchCountries(); }} variant="outline" disabled={loading}>
+          <Button onClick={() => { fetchCountries(); fetchAllGlobalCountries(); }} variant="outline" disabled={loading}>
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
             Yenilə
           </Button>
@@ -316,7 +335,7 @@ export default function GlobalCountriesPage() {
         <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100/50">
           <CardContent className="p-4">
             <p className="text-xs text-cyan-600 font-medium">Global Ölkələr</p>
-            <p className="text-2xl font-bold text-cyan-900">{pagination?.total || countries.length}</p>
+            <p className="text-2xl font-bold text-cyan-900">{allGlobalCountries.length}</p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/50">
@@ -426,6 +445,56 @@ export default function GlobalCountriesPage() {
             </Button>
             <Button onClick={handleCreate} disabled={saving}>
               <Plus className="w-4 h-4 mr-1" /> {saving ? "Yaradılır..." : "Yarat"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Link Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Ölkə Əlaqəsini Redaktə Et</DialogTitle>
+            <DialogDescription>
+              {editingItem?.name} ({editingType?.toUpperCase()}) - Global ölkəyə bağlayın və ya əlaqəni silin.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <div className="space-y-4">
+              <div>
+                <Label>Mənbə Ölkə</Label>
+                <div className="mt-1 p-3 bg-slate-100 rounded-lg">
+                  <p className="font-medium">{editingItem?.name}</p>
+                  <p className="text-sm text-slate-500">Kod: {editingItem?.code}</p>
+                </div>
+              </div>
+              
+              <div>
+                <Label>Global Ölkəyə Bağla</Label>
+                <Select value={selectedGlobalCountryId} onValueChange={setSelectedGlobalCountryId}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Global ölkə seçin..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">❌ Əlaqəni sil</SelectItem>
+                    {allGlobalCountries.map((gc) => (
+                      <SelectItem key={gc.id} value={gc.id}>
+                        {gc.flagEmoji} {gc.nameAz || gc.nameEn} ({gc.iso2})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+              <X className="w-4 h-4 mr-1" /> Ləğv et
+            </Button>
+            <Button onClick={handleSaveLink} disabled={saving}>
+              <Save className="w-4 h-4 mr-1" /> {saving ? "Saxlanılır..." : "Saxla"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -543,27 +612,27 @@ export default function GlobalCountriesPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1 flex-wrap">
-                            {country._count.azCountries > 0 && (
+                            {country._count?.azCountries ? (
                               <Badge variant="outline" className="bg-emerald-50 text-emerald-700 text-xs">🇦🇿 {country._count.azCountries}</Badge>
-                            )}
-                            {country._count.euCountries > 0 && (
+                            ) : null}
+                            {country._count?.euCountries ? (
                               <Badge variant="outline" className="bg-blue-50 text-blue-700 text-xs">🇪🇺 {country._count.euCountries}</Badge>
-                            )}
-                            {country._count.fpmaCountries > 0 && (
+                            ) : null}
+                            {country._count?.fpmaCountries ? (
                               <Badge variant="outline" className="bg-orange-50 text-orange-700 text-xs">📊 {country._count.fpmaCountries}</Badge>
-                            )}
-                            {country._count.faoCountries > 0 && (
+                            ) : null}
+                            {country._count?.faoCountries ? (
                               <Badge variant="outline" className="bg-teal-50 text-teal-700 text-xs">🌍 {country._count.faoCountries}</Badge>
-                            )}
+                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell>
-                          {country._count.globalMarkets > 0 && (
+                          {country._count?.globalMarkets ? (
                             <Badge variant="outline" className="bg-purple-50 text-purple-700">
                               <MapPin className="w-3 h-3 mr-1" />
                               {country._count.globalMarkets}
                             </Badge>
-                          )}
+                          ) : null}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -574,52 +643,48 @@ export default function GlobalCountriesPage() {
           </Card>
         </TabsContent>
 
-        {/* Mapping Tabs */}
+        {/* Mapping Tabs with Edit functionality */}
         <TabsContent value="az-mapping" className="space-y-4">
           <CountryMappingSection
-            title="🇦🇿 Azərbaycan Ölkələrini Bağla"
+            title="🇦🇿 Azərbaycan Ölkələri"
             description="AZ ölkələrini Global ölkələrə bağlayın."
-            unlinkedItems={unlinkedAzCountries}
-            linkedItems={azCountries.filter(c => c.globalCountryId)}
-            globalCountries={countries}
-            onLink={(id, gcId) => linkCountry(id, gcId, "az")}
-            onUnlink={(id) => unlinkCountry(id, "az")}
+            items={azCountries}
+            allGlobalCountries={allGlobalCountries}
+            getGlobalCountry={getGlobalCountry}
+            onEdit={(item) => openEditDialog(item, "az")}
           />
         </TabsContent>
 
         <TabsContent value="eu-mapping" className="space-y-4">
           <CountryMappingSection
-            title="🇪🇺 EU Ölkələrini Bağla"
+            title="🇪🇺 EU Ölkələri"
             description="Eurostat ölkələrini Global ölkələrə bağlayın."
-            unlinkedItems={unlinkedEuCountries}
-            linkedItems={euCountries.filter(c => c.globalCountryId)}
-            globalCountries={countries}
-            onLink={(id, gcId) => linkCountry(id, gcId, "eu")}
-            onUnlink={(id) => unlinkCountry(id, "eu")}
+            items={euCountries}
+            allGlobalCountries={allGlobalCountries}
+            getGlobalCountry={getGlobalCountry}
+            onEdit={(item) => openEditDialog(item, "eu")}
           />
         </TabsContent>
 
         <TabsContent value="fpma-mapping" className="space-y-4">
           <CountryMappingSection
-            title="📊 FPMA Ölkələrini Bağla"
+            title="📊 FPMA Ölkələri"
             description="FAO FPMA ölkələrini Global ölkələrə bağlayın."
-            unlinkedItems={unlinkedFpmaCountries}
-            linkedItems={fpmaCountries.filter(c => c.globalCountryId)}
-            globalCountries={countries}
-            onLink={(id, gcId) => linkCountry(id, gcId, "fpma")}
-            onUnlink={(id) => unlinkCountry(id, "fpma")}
+            items={fpmaCountries}
+            allGlobalCountries={allGlobalCountries}
+            getGlobalCountry={getGlobalCountry}
+            onEdit={(item) => openEditDialog(item, "fpma")}
           />
         </TabsContent>
 
         <TabsContent value="fao-mapping" className="space-y-4">
           <CountryMappingSection
-            title="🌍 FAO Ölkələrini Bağla"
+            title="🌍 FAO Ölkələri"
             description="FAOSTAT ölkələrini Global ölkələrə bağlayın."
-            unlinkedItems={unlinkedFaoCountries}
-            linkedItems={faoCountries.filter(c => c.globalCountryId)}
-            globalCountries={countries}
-            onLink={(id, gcId) => linkCountry(id, gcId, "fao")}
-            onUnlink={(id) => unlinkCountry(id, "fao")}
+            items={faoCountries}
+            allGlobalCountries={allGlobalCountries}
+            getGlobalCountry={getGlobalCountry}
+            onEdit={(item) => openEditDialog(item, "fao")}
           />
         </TabsContent>
       </Tabs>
@@ -627,20 +692,23 @@ export default function GlobalCountriesPage() {
   );
 }
 
-// Country Mapping Section Component
+// Country Mapping Section Component with Edit functionality
 interface CountryMappingSectionProps {
   title: string;
   description: string;
-  unlinkedItems: SourceCountry[];
-  linkedItems: SourceCountry[];
-  globalCountries: GlobalCountry[];
-  onLink: (id: string, globalCountryId: string) => void;
-  onUnlink: (id: string) => void;
+  items: SourceCountry[];
+  allGlobalCountries: GlobalCountry[];
+  getGlobalCountry: (id: string | null) => GlobalCountry | null | undefined;
+  onEdit: (item: SourceCountry) => void;
 }
 
-function CountryMappingSection({ title, description, unlinkedItems, linkedItems, globalCountries, onLink, onUnlink }: CountryMappingSectionProps) {
+function CountryMappingSection({ title, description, items, allGlobalCountries, getGlobalCountry, onEdit }: CountryMappingSectionProps) {
+  const unlinkedItems = items.filter(c => !c.globalCountryId);
+  const linkedItems = items.filter(c => c.globalCountryId);
+
   return (
     <>
+      {/* Unlinked Items */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -657,46 +725,45 @@ function CountryMappingSection({ title, description, unlinkedItems, linkedItems,
               <p>Bütün ölkələr bağlanıb!</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Ölkə</TableHead>
-                  <TableHead>Kod</TableHead>
-                  <TableHead>Global Ölkəyə Bağla</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {unlinkedItems.slice(0, 50).map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item.name}</TableCell>
-                    <TableCell>
-                      <code className="text-xs bg-slate-100 px-2 py-1 rounded">{item.code}</code>
-                    </TableCell>
-                    <TableCell>
-                      <Select onValueChange={(value) => onLink(item.id, value)}>
-                        <SelectTrigger className="w-64">
-                          <SelectValue placeholder="Global ölkə seçin..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {globalCountries.map((gc) => (
-                            <SelectItem key={gc.id} value={gc.id}>
-                              {gc.flagEmoji} {gc.nameAz || gc.nameEn} ({gc.iso2})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
+            <>
+              <p className="text-sm font-medium text-orange-600 mb-3">Əlaqəsiz Ölkələr ({unlinkedItems.length})</p>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Ölkə</TableHead>
+                    <TableHead>Kod</TableHead>
+                    <TableHead>Global Ölkə</TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-          {unlinkedItems.length > 50 && (
-            <p className="text-sm text-slate-500 mt-2">+ {unlinkedItems.length - 50} daha çox əlaqəsiz ölkə var</p>
+                </TableHeader>
+                <TableBody>
+                  {unlinkedItems.slice(0, 30).map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell>
+                        <code className="text-xs bg-slate-100 px-2 py-1 rounded">{item.code}</code>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="bg-orange-50 text-orange-700">Əlaqəsiz</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="outline" size="sm" onClick={() => onEdit(item)}>
+                          <Edit className="w-4 h-4 mr-1" /> Bağla
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {unlinkedItems.length > 30 && (
+                <p className="text-sm text-slate-500 mt-2">+ {unlinkedItems.length - 30} daha çox</p>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
 
+      {/* Linked Items */}
       {linkedItems.length > 0 && (
         <Card>
           <CardHeader>
@@ -707,24 +774,32 @@ function CountryMappingSection({ title, description, unlinkedItems, linkedItems,
               <TableHeader>
                 <TableRow>
                   <TableHead>Ölkə</TableHead>
+                  <TableHead>Kod</TableHead>
                   <TableHead>Global Ölkə</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {linkedItems.slice(0, 30).map((item) => {
-                  const gc = globalCountries.find(c => c.id === item.globalCountryId);
+                {linkedItems.slice(0, 50).map((item) => {
+                  const gc = getGlobalCountry(item.globalCountryId);
                   return (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.name}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
-                          {gc?.flagEmoji} {gc?.nameAz || gc?.nameEn || "N/A"}
-                        </Badge>
+                        <code className="text-xs bg-slate-100 px-2 py-1 rounded">{item.code}</code>
                       </TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => onUnlink(item.id)}>
-                          <Unlink className="w-4 h-4 mr-1" /> Ayır
+                        {gc ? (
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
+                            {gc.flagEmoji} {gc.nameAz || gc.nameEn}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-red-50 text-red-700">N/A</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="sm" onClick={() => onEdit(item)}>
+                          <Edit className="w-4 h-4 mr-1" /> Redaktə
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -732,10 +807,12 @@ function CountryMappingSection({ title, description, unlinkedItems, linkedItems,
                 })}
               </TableBody>
             </Table>
+            {linkedItems.length > 50 && (
+              <p className="text-sm text-slate-500 mt-2">+ {linkedItems.length - 50} daha çox</p>
+            )}
           </CardContent>
         </Card>
       )}
     </>
   );
 }
-
