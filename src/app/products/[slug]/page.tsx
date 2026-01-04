@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { ProductPageClient } from "./client";
 import { Leaf, ChevronRight } from "lucide-react";
@@ -10,7 +11,19 @@ interface Props {
   searchParams: Promise<{ country?: string }>;
 }
 
-async function getProductData(slug: string, countryCode?: string) {
+// Get user's country from Vercel headers or fallback
+async function getUserCountry(): Promise<string | null> {
+  try {
+    const headersList = await headers();
+    // Vercel provides country code in x-vercel-ip-country header
+    const country = headersList.get("x-vercel-ip-country");
+    return country?.toUpperCase() || null;
+  } catch {
+    return null;
+  }
+}
+
+async function getProductData(slug: string, countryCode?: string, userCountry?: string | null) {
   // First, try to find GlobalProduct with all relations
   const globalProduct = await prisma.globalProduct.findUnique({
     where: { slug },
@@ -83,19 +96,31 @@ async function getProductData(slug: string, countryCode?: string) {
     const azProduct = globalProduct.localProducts[0];
     
     // Determine which country to show by default
-    // Priority: 1) URL country, 2) AZ if has data, 3) First country with FPMA data
+    // Priority: 1) URL country, 2) User's country (if has data), 3) AZ if has data, 4) First country with FPMA data
     let selectedCountry = countryCode?.toUpperCase();
     
+    // Get all countries with data for this product
+    const countriesWithData = new Set<string>();
+    if (azProduct) {
+      countriesWithData.add("AZ");
+    }
+    globalProduct.fpmaCommodities.forEach(c => {
+      c.series.filter(s => s.prices && s.prices.length > 0).forEach(s => {
+        if (s.country.iso2) countriesWithData.add(s.country.iso2.toUpperCase());
+        if (s.country.iso3) countriesWithData.add(s.country.iso3.toUpperCase());
+      });
+    });
+    
     if (!selectedCountry) {
-      // No country in URL - find first country with data
-      if (azProduct) {
+      // No country in URL - try user's country first
+      if (userCountry && countriesWithData.has(userCountry)) {
+        selectedCountry = userCountry;
+      } else if (azProduct) {
         selectedCountry = "AZ"; // AZ has data
       } else {
-        // Check FPMA countries
-        const fpmaCountries = globalProduct.fpmaCommodities.flatMap(c => 
-          c.series.filter(s => s.prices && s.prices.length > 0).map(s => s.country.iso2 || s.country.iso3)
-        );
-        selectedCountry = fpmaCountries[0]?.toUpperCase() || "AZ";
+        // Use first country with FPMA data
+        const fpmaCountries = Array.from(countriesWithData);
+        selectedCountry = fpmaCountries[0] || "AZ";
       }
     }
     
@@ -537,7 +562,11 @@ async function getProductData(slug: string, countryCode?: string) {
 export default async function ProductPage({ params, searchParams }: Props) {
   const { slug } = await params;
   const { country } = await searchParams;
-  const data = await getProductData(slug, country);
+  
+  // Get user's country from IP (Vercel provides this)
+  const userCountry = await getUserCountry();
+  
+  const data = await getProductData(slug, country, userCountry);
 
   if (!data) {
     notFound();

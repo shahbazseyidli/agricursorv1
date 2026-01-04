@@ -302,6 +302,7 @@ export function ProductPageClient({
   const [stats, setStats] = useState<any>(null);
   const [filters, setFilters] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   // Müqayisə üçün ikinci bazar seçimi (filter kimi)
   const [compareMarket, setCompareMarket] = useState<string>("");
@@ -312,6 +313,7 @@ export function ProductPageClient({
     
     async function fetchPrices() {
       setLoading(true);
+      setError(null);
       try {
         const params = new URLSearchParams();
         
@@ -413,10 +415,11 @@ export function ProductPageClient({
             setSelectedProductType(typesWithData[0].id);
           }
         }
-      } catch (error: any) {
+      } catch (err: any) {
         // Ignore abort errors
-        if (error.name === "AbortError") return;
-        console.error("Error fetching prices:", error);
+        if (err.name === "AbortError") return;
+        console.error("Error fetching prices:", err);
+        setError("Qiymət məlumatları yüklənə bilmədi. Yenidən cəhd edin.");
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false);
@@ -694,14 +697,31 @@ export function ProductPageClient({
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                     <p className="text-sm text-emerald-700">Son qiymət</p>
-                    {latestPrice && (
+                    {latestPrice && !loading && (
                       <Badge variant="outline" className="text-xs bg-white">
                         {latestPrice.marketType} • {latestPrice.market}
                       </Badge>
                     )}
+                    {loading && (
+                      <div className="w-32 h-5 bg-emerald-200/50 rounded animate-pulse" />
+                    )}
                   </div>
                   
-                  {latestPrice ? (
+                  {loading ? (
+                    // Loading skeleton for price card
+                    <div className="space-y-3">
+                      <div className="flex items-baseline gap-3">
+                        <div className="w-48 h-12 bg-emerald-200/50 rounded animate-pulse" />
+                        <div className="w-16 h-6 bg-emerald-200/50 rounded animate-pulse" />
+                      </div>
+                      <div className="w-32 h-4 bg-emerald-200/50 rounded animate-pulse" />
+                      <div className="flex items-center gap-4 mt-4">
+                        <div className="w-20 h-16 bg-white/70 rounded-lg animate-pulse" />
+                        <div className="w-20 h-16 bg-emerald-100 rounded-lg animate-pulse" />
+                        <div className="w-20 h-16 bg-white/70 rounded-lg animate-pulse" />
+                      </div>
+                    </div>
+                  ) : latestPrice ? (
                     <>
                       <div className="flex items-baseline gap-3 mb-2">
                         <span className="text-5xl font-bold text-emerald-800">
@@ -1125,9 +1145,51 @@ export function ProductPageClient({
                   </div>
                 </div>
               ) : loading ? (
-                <div className="h-[400px] flex flex-col items-center justify-center gap-3">
-                  <div className="animate-spin w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full" />
-                  <p className="text-sm text-slate-500">Qiymət məlumatları yüklənir...</p>
+                // Loading Skeleton
+                <div className="h-[400px] flex flex-col">
+                  {/* Skeleton chart area */}
+                  <div className="flex-1 flex items-end gap-1 p-4">
+                    {Array.from({ length: 20 }).map((_, i) => (
+                      <div 
+                        key={i} 
+                        className="flex-1 bg-slate-200 rounded-t animate-pulse"
+                        style={{ height: `${30 + Math.random() * 60}%` }}
+                      />
+                    ))}
+                  </div>
+                  {/* Skeleton x-axis */}
+                  <div className="h-8 flex items-center justify-between px-4">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="w-16 h-3 bg-slate-200 rounded animate-pulse" />
+                    ))}
+                  </div>
+                  {/* Loading text */}
+                  <div className="flex items-center justify-center gap-2 py-2">
+                    <div className="animate-spin w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full" />
+                    <p className="text-sm text-slate-500">Qiymət məlumatları yüklənir...</p>
+                  </div>
+                </div>
+              ) : error ? (
+                // Error State
+                <div className="h-[400px] flex flex-col items-center justify-center gap-4">
+                  <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
+                    <X className="w-8 h-8 text-red-600" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-lg font-medium text-slate-900 mb-1">Xəta baş verdi</p>
+                    <p className="text-sm text-slate-500 mb-4">{error}</p>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setError(null);
+                        setLoading(true);
+                        // Trigger refetch by changing a state that's in useEffect deps
+                        setDateRange(dateRange === "1y" ? "1y" : dateRange);
+                      }}
+                    >
+                      Yenidən cəhd et
+                    </Button>
+                  </div>
                 </div>
               ) : chartData.length > 0 ? (
                 <PriceChart 
