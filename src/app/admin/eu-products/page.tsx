@@ -249,7 +249,7 @@ export default function EuProductsPage() {
                 <SelectValue placeholder="Kateqoriya" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Hamısı</SelectItem>
+                <SelectItem value="all">Hamısı</SelectItem>
                 {categories.map(c => (
                   <SelectItem key={c.name} value={c.name}>
                     {c.name} ({c.count})
@@ -394,7 +394,7 @@ export default function EuProductsPage() {
                   <SelectValue placeholder="Məhsul seçin..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Uyğunlaşdırma yoxdur</SelectItem>
+                  <SelectItem value="none">Uyğunlaşdırma yoxdur</SelectItem>
                   {localProducts.map(p => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name} {p.nameEn ? `(${p.nameEn})` : ""}

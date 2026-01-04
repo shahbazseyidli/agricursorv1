@@ -610,7 +610,7 @@ model EuCountry {
 model EuProduct {
   id             String  @id @default(cuid())
   eurostatCode   String? @unique @map("eurostat_code")
-  ecAgrifoodCode String? @map("ec_agrifood_code")
+  ecAgrifoodCode String? @unique @map("ec_agrifood_code")
   nameEn         String  @map("name_en")
   nameAz         String? @map("name_az")
   nameRu         String? @map("name_ru")

@@ -355,7 +355,7 @@ export default function GlobalProductsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sourceId: editLinkItem.id,
-          globalProductId: selectedGlobalProductId || null,
+          globalProductId: selectedGlobalProductId === "__unlink__" ? null : (selectedGlobalProductId || null),
           type: editLinkType,
         }),
       });
@@ -668,7 +668,7 @@ export default function GlobalProductsPage() {
                     <SelectValue placeholder="Global məhsul seçin..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">❌ Əlaqəni sil</SelectItem>
+                    <SelectItem value="__unlink__">❌ Əlaqəni sil</SelectItem>
                     {allGlobalProducts.map((gp) => (
                       <SelectItem key={gp.id} value={gp.id}>
                         {gp.nameAz || gp.nameEn} ({gp.slug})

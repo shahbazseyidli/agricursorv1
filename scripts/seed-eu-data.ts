@@ -87,23 +87,22 @@ async function seedEurostatProducts() {
   console.log("Seeding Eurostat products...");
   
   for (const product of EUROSTAT_PRODUCTS) {
-    const existing = await prisma.euProduct.findFirst({
-      where: { eurostatCode: product.code }
+    await prisma.euProduct.upsert({
+      where: { eurostatCode: product.code },
+      update: {
+        nameEn: product.nameEn,
+        category: product.category,
+      },
+      create: {
+        eurostatCode: product.code,
+        nameEn: product.nameEn,
+        category: product.category,
+        unit: "€/100kg",
+      },
     });
-    
-    if (!existing) {
-      await prisma.euProduct.create({
-        data: {
-          eurostatCode: product.code,
-          nameEn: product.nameEn,
-          category: product.category,
-          unit: "€/100kg",
-        },
-      });
-    }
   }
   
-  console.log(`✓ ${EUROSTAT_PRODUCTS.length} Eurostat products seeded`);
+  console.log(`✓ ${EUROSTAT_PRODUCTS.length} Eurostat products seeded/updated`);
 }
 
 async function fetchEcAgrifoodProducts(): Promise<string[]> {
@@ -132,27 +131,26 @@ async function seedEcAgrifoodProducts(products: string[]) {
   ];
   
   for (const productName of products) {
-    const existing = await prisma.euProduct.findFirst({
-      where: { ecAgrifoodCode: productName }
-    });
+    const category = fruits.some(f => productName.toLowerCase().includes(f.toLowerCase()))
+      ? "Fruits"
+      : "Vegetables";
     
-    if (!existing) {
-      const category = fruits.some(f => productName.toLowerCase().includes(f.toLowerCase()))
-        ? "Fruits"
-        : "Vegetables";
-      
-      await prisma.euProduct.create({
-        data: {
-          ecAgrifoodCode: productName,
-          nameEn: productName,
-          category,
-          unit: "€/100kg",
-        },
-      });
-    }
+    await prisma.euProduct.upsert({
+      where: { ecAgrifoodCode: productName },
+      update: {
+        nameEn: productName,
+        category,
+      },
+      create: {
+        ecAgrifoodCode: productName,
+        nameEn: productName,
+        category,
+        unit: "€/100kg",
+      },
+    });
   }
   
-  console.log(`✓ EC Agrifood products seeded`);
+  console.log(`✓ EC Agrifood products seeded/updated`);
 }
 
 async function fetchEurostatPrices(

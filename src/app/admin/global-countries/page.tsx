@@ -216,7 +216,7 @@ export default function GlobalCountriesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sourceId: editingItem.id,
-          globalCountryId: selectedGlobalCountryId || null,
+          globalCountryId: selectedGlobalCountryId === "__unlink__" ? null : (selectedGlobalCountryId || null),
           type: editingType,
         }),
       });
@@ -477,7 +477,7 @@ export default function GlobalCountriesPage() {
                     <SelectValue placeholder="Global ölkə seçin..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">❌ Əlaqəni sil</SelectItem>
+                    <SelectItem value="__unlink__">❌ Əlaqəni sil</SelectItem>
                     {allGlobalCountries.map((gc) => (
                       <SelectItem key={gc.id} value={gc.id}>
                         {gc.flagEmoji} {gc.nameAz || gc.nameEn} ({gc.iso2})
