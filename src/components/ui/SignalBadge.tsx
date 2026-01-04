@@ -1,16 +1,18 @@
 "use client";
 
-import { TrendingUp, TrendingDown, Minus, AlertTriangle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, AlertTriangle, Eye, ShoppingCart, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+type SignalType = 'bullish' | 'bearish' | 'neutral' | 'warning' | 'buy' | 'sell' | 'hold' | 'watch';
+
 interface SignalBadgeProps {
-  signal: 'bullish' | 'bearish' | 'neutral' | 'warning';
+  signal: SignalType;
   showLabel?: boolean;
   size?: 'sm' | 'md';
 }
 
 export function SignalBadge({ signal, showLabel = true, size = 'md' }: SignalBadgeProps) {
-  const config = {
+  const config: Record<SignalType, { icon: typeof TrendingUp; label: string; className: string }> = {
     bullish: {
       icon: TrendingUp,
       label: 'Bullish',
@@ -31,9 +33,30 @@ export function SignalBadge({ signal, showLabel = true, size = 'md' }: SignalBad
       label: 'Warning',
       className: 'signal-warning',
     },
+    buy: {
+      icon: ShoppingCart,
+      label: 'Al',
+      className: 'signal-up',
+    },
+    sell: {
+      icon: DollarSign,
+      label: 'Sat',
+      className: 'signal-down',
+    },
+    hold: {
+      icon: Minus,
+      label: 'Saxla',
+      className: 'bg-muted text-muted-foreground',
+    },
+    watch: {
+      icon: Eye,
+      label: 'İzlə',
+      className: 'signal-warning',
+    },
   };
 
-  const { icon: Icon, label, className } = config[signal];
+  const signalConfig = config[signal] || config.neutral;
+  const { icon: Icon, label, className } = signalConfig;
   const sizeClasses = size === 'sm' ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-xs';
   const iconSize = size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5';
 

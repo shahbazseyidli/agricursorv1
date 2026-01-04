@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/eu-sync",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/update-price-signals",
+      "schedule": "0 14 * * 3"
     }
   ]
 }

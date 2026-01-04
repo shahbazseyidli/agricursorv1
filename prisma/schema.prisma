@@ -101,6 +101,7 @@ model GlobalCountry {
   
   // Global markets in this country
   globalMarkets  GlobalMarket[]
+  priceSignals   PriceSignal[]
 
   @@index([region])
   @@index([subRegion])
@@ -132,6 +133,7 @@ model GlobalPriceStage {
   euPrices         EuPrice[]        // EU prices linked
   faoPrices        FaoPrice[]       // FAO prices linked  
   fpmaSeries       FpmaSerie[]      // FPMA series linked
+  priceSignals     PriceSignal[]
 
   @@map("global_price_stages")
 }
@@ -172,6 +174,7 @@ model GlobalMarket {
   // Source mappings
   azMarkets       Market[]      // AZ markets linked
   fpmaMarkets     FpmaMarket[]  // FPMA markets linked
+  priceSignals    PriceSignal[]
 
   @@unique([globalCountryId, name])
   @@index([globalCountryId])
@@ -539,6 +542,7 @@ model GlobalProduct {
   faoProducts      FaoProduct[]
   fpmaCommodities  FpmaCommodity[]
   azAggregates     GlobalAzAggregate[]
+  priceSignals     PriceSignal[]
 
   @@index([globalCategoryId])
   @@index([category])
@@ -580,6 +584,7 @@ model GlobalProductVariety {
   fpmaCommodities FpmaCommodity[]   // Link to FPMA commodities
   euProducts      EuProduct[]       // Link to EU products
   faoProducts     FaoProduct[]      // Link to FAO products
+  priceSignals    PriceSignal[]
 
   @@unique([globalProductId, slug])
   @@index([fpmaVarietyCode])
@@ -1024,4 +1029,72 @@ model FpmaDataSync {
   @@index([status])
   @@index([createdAt])
   @@map("fpma_data_syncs")
+}
+
+// ============================================
+// PRICE SIGNALS - Live Market Intelligence
+// ============================================
+
+// SignalStatus values: "INCREASED" | "DECREASED" | "STABLE"
+// SQLite doesn't support enums, using String instead
+
+model PriceSignal {
+  id                    String   @id @default(cuid())
+  
+  // Relations to global entities
+  globalProductId       String   @map("global_product_id")
+  globalProduct         GlobalProduct @relation(fields: [globalProductId], references: [id], onDelete: Cascade)
+  
+  globalVarietyId       String?  @map("global_variety_id")
+  globalVariety         GlobalProductVariety? @relation(fields: [globalVarietyId], references: [id], onDelete: SetNull)
+  
+  globalCountryId       String   @map("global_country_id")
+  globalCountry         GlobalCountry @relation(fields: [globalCountryId], references: [id], onDelete: Cascade)
+  
+  globalMarketId        String   @map("global_market_id")
+  globalMarket          GlobalMarket @relation(fields: [globalMarketId], references: [id], onDelete: Cascade)
+  
+  globalPriceStageId    String?  @map("global_price_stage_id")
+  globalPriceStage      GlobalPriceStage? @relation(fields: [globalPriceStageId], references: [id], onDelete: SetNull)
+  
+  // Prices (normalized to USD/kg)
+  currentPrice          Float    @map("current_price")
+  currentPriceDate      DateTime @map("current_price_date")
+  previousPrice         Float?   @map("previous_price")
+  
+  // Historical prices for different periods
+  monthAgoPrice         Float?   @map("month_ago_price")      // 1 month ago (25-45 days)
+  threeMonthAgoPrice    Float?   @map("three_month_ago_price") // 3 months ago (80-100 days)
+  sixMonthAgoPrice      Float?   @map("six_month_ago_price")   // 6 months ago (170-190 days)
+  yearAgoPrice          Float?   @map("year_ago_price")        // 12 months ago (350-380 days)
+  
+  // Change percentages
+  mom                   Float?   // Month-over-Month % (1M)
+  threeMonthChange      Float?   @map("three_month_change") // 3M change %
+  sixMonthChange        Float?   @map("six_month_change")   // 6M change %
+  yearChange            Float?   @map("year_change")        // 12M change %
+  
+  // Status: "INCREASED" | "DECREASED" | "STABLE"
+  momStatus             String   @default("STABLE") @map("mom_status")
+  threeMonthStatus      String   @default("STABLE") @map("three_month_status")
+  sixMonthStatus        String   @default("STABLE") @map("six_month_status")
+  yearStatus            String   @default("STABLE") @map("year_status")
+  
+  // Data source
+  dataSource            String   @map("data_source") // "AZ" | "FPMA"
+  
+  // Metadata
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([globalProductId, globalVarietyId, globalCountryId, globalMarketId, globalPriceStageId])
+  @@index([globalProductId])
+  @@index([globalCountryId])
+  @@index([globalMarketId])
+  @@index([momStatus])
+  @@index([threeMonthStatus])
+  @@index([sixMonthStatus])
+  @@index([yearStatus])
+  @@index([dataSource])
+  @@map("price_signals")
 }

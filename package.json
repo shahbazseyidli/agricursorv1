@@ -13,6 +13,7 @@
     "db:seed": "npx tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset --force",
+    "update:price-signals": "npx tsx scripts/update-price-signals.ts",
     "version:patch": "npm version patch -m 'chore: bump version to %s'",
     "version:minor": "npm version minor -m 'chore: bump version to %s'",
     "version:major": "npm version major -m 'chore: bump version to %s'"

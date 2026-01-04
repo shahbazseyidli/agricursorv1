@@ -1,24 +1,110 @@
 "use client";
 
-import { useState } from 'react';
-import { Search, Sparkles, ArrowRight, Lock } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Search, Sparkles, ArrowRight, Lock, Loader2, X, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 
 const suggestedQueries = [
-  'Wheat prices in Turkey last 30 days',
-  'Compare hazelnut markets: Turkey vs Azerbaijan',
-  'Tomato price trends in Caucasus region',
+  'Azərbaycanda pomidor qiyməti',
+  'Türkiyədə buğda qiyməti',
+  'Alma qiymətləri müqayisəsi',
+  'Kartof bazarı analizi',
 ];
 
 export function AIHero() {
   const [query, setQuery] = useState('');
+  const [response, setResponse] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [showResponse, setShowResponse] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const { isAuthenticated, openLoginModal } = useAuth();
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
     if (!isAuthenticated) {
       openLoginModal();
+      return;
+    }
+
+    if (!query.trim()) return;
+
+    // Abort previous request if exists
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    abortControllerRef.current = new AbortController();
+    setIsLoading(true);
+    setResponse('');
+    setShowResponse(true);
+
+    try {
+      const res = await fetch('/api/ai/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
+        signal: abortControllerRef.current.signal,
+      });
+
+      if (!res.ok) {
+        throw new Error('AI xidməti xətası');
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('Stream oxuna bilmir');
+
+      const decoder = new TextDecoder();
+      let fullResponse = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.content) {
+                fullResponse += parsed.content;
+                setResponse(fullResponse);
+              }
+            } catch {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        // Request was cancelled
+        return;
+      }
+      console.error('AI Error:', error);
+      setResponse('Xəta baş verdi. Zəhmət olmasa yenidən cəhd edin.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSearch();
+    }
+  };
+
+  const closeResponse = () => {
+    setShowResponse(false);
+    setResponse('');
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
   };
 
@@ -57,19 +143,27 @@ export function AIHero() {
               <Sparkles className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-ai-accent" />
               <Input
                 type="text"
-                placeholder="Ask anything about agricultural markets..."
+                placeholder="Kənd təsərrüfatı bazarları haqqında soruşun..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={isLoading}
                 className="w-full h-14 pl-12 pr-32 text-lg bg-ai-muted border-ai-border text-ai-foreground placeholder:text-ai-foreground/40 rounded-xl focus:ring-2 focus:ring-ai-accent focus:border-ai-accent"
               />
               <Button 
                 onClick={handleSearch}
+                disabled={isLoading || (!isAuthenticated && false)}
                 className="absolute right-2 top-1/2 -translate-y-1/2 bg-ai-accent hover:bg-ai-accent/90 text-ai font-medium"
               >
-                {isAuthenticated ? (
+                {isLoading ? (
                   <>
-                    <Search className="h-4 w-4 mr-2" />
-                    Search
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Düşünür...
+                  </>
+                ) : isAuthenticated ? (
+                  <>
+                    <Send className="h-4 w-4 mr-2" />
+                    Soruş
                   </>
                 ) : (
                   <>
@@ -87,7 +181,7 @@ export function AIHero() {
           </div>
           
           {/* Suggested queries */}
-          <div className="flex flex-wrap justify-center gap-2">
+          <div className="flex flex-wrap justify-center gap-2 mb-8">
             {suggestedQueries.map((suggestion, index) => (
               <button
                 key={index}
@@ -98,16 +192,76 @@ export function AIHero() {
                     openLoginModal();
                   }
                 }}
-                className="px-3 py-1.5 text-sm rounded-full bg-ai-muted border border-ai-border text-ai-foreground/70 hover:text-ai-foreground hover:border-ai-accent/50 transition-colors flex items-center gap-1"
+                disabled={isLoading}
+                className="px-3 py-1.5 text-sm rounded-full bg-ai-muted border border-ai-border text-ai-foreground/70 hover:text-ai-foreground hover:border-ai-accent/50 transition-colors flex items-center gap-1 disabled:opacity-50"
               >
                 {suggestion}
                 <ArrowRight className="h-3 w-3" />
               </button>
             ))}
           </div>
+
+          {/* AI Response */}
+          {showResponse && (
+            <div className="relative max-w-2xl mx-auto text-left">
+              <div className="premium-card p-6 bg-ai-muted/50 border border-ai-border rounded-xl">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-ai-accent" />
+                    <span className="font-semibold text-ai-accent">AI Cavabı</span>
+                  </div>
+                  <button 
+                    onClick={closeResponse}
+                    className="p-1 hover:bg-ai-border rounded-lg transition-colors"
+                  >
+                    <X className="h-4 w-4 text-ai-foreground/60" />
+                  </button>
+                </div>
+                
+                <div className="prose prose-sm prose-invert max-w-none">
+                  {response ? (
+                    <div className="whitespace-pre-wrap text-ai-foreground/90 leading-relaxed">
+                      {response.split('\n').map((line, i) => {
+                        // Handle bold text
+                        const parts = line.split(/\*\*(.*?)\*\*/g);
+                        return (
+                          <p key={i} className="my-1">
+                            {parts.map((part, j) => 
+                              j % 2 === 1 ? (
+                                <strong key={j} className="text-ai-accent font-semibold">{part}</strong>
+                              ) : (
+                                <span key={j}>{part}</span>
+                              )
+                            )}
+                          </p>
+                        );
+                      })}
+                    </div>
+                  ) : isLoading ? (
+                    <div className="flex items-center gap-2 text-ai-foreground/60">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Məlumatlar analiz edilir...</span>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Data sources footer */}
+                {response && !isLoading && (
+                  <div className="mt-4 pt-4 border-t border-ai-border">
+                    <div className="flex flex-wrap gap-2 text-xs text-ai-foreground/50">
+                      <span>Data mənbələri:</span>
+                      <span className="px-2 py-0.5 rounded bg-ai-border">Agro.gov.az</span>
+                      <span className="px-2 py-0.5 rounded bg-ai-border">EUROSTAT</span>
+                      <span className="px-2 py-0.5 rounded bg-ai-border">FAOSTAT</span>
+                      <span className="px-2 py-0.5 rounded bg-ai-border">FAO FPMA</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </section>
   );
 }
-
