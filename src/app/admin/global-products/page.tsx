@@ -46,6 +46,7 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
+  ArrowRightLeft,
 } from "lucide-react";
 
 interface GlobalCategory {
@@ -157,6 +158,11 @@ export default function GlobalProductsPage() {
   const [editLinkType, setEditLinkType] = useState<"az" | "eu" | "fpma" | "fao" | null>(null);
   const [showEditLinkDialog, setShowEditLinkDialog] = useState(false);
   const [selectedGlobalProductId, setSelectedGlobalProductId] = useState<string>("");
+
+  // Convert to variety dialog state
+  const [showConvertDialog, setShowConvertDialog] = useState(false);
+  const [productToConvert, setProductToConvert] = useState<GlobalProduct | null>(null);
+  const [targetProductId, setTargetProductId] = useState<string>("");
 
   // Fetch all data on mount
   useEffect(() => {
@@ -386,6 +392,40 @@ export default function GlobalProductsPage() {
     if (!id) return null;
     return allGlobalProducts.find(gp => gp.id === id);
   };
+
+  // Convert GlobalProduct to GlobalProductVariety
+  async function handleConvertToVariety() {
+    if (!productToConvert || !targetProductId) return;
+    
+    setSaving(true);
+    setError("");
+    
+    try {
+      const res = await fetch(`/api/admin/global-products/${productToConvert.id}/convert-to-variety`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetProductId }),
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        setSuccess(`"${productToConvert.nameEn}" variety-yə çevrildi`);
+        setShowConvertDialog(false);
+        setProductToConvert(null);
+        setTargetProductId("");
+        fetchProducts();
+        fetchAllGlobalProducts();
+      } else {
+        setError(data.error || "Çevirmək mümkün olmadı");
+      }
+    } catch (error) {
+      setError("Server xətası");
+    } finally {
+      setSaving(false);
+    }
+    setTimeout(() => { setSuccess(""); setError(""); }, 5000);
+  }
 
   async function handleSave() {
     if (!editingProduct) return;
@@ -686,6 +726,69 @@ export default function GlobalProductsPage() {
             </Button>
             <Button onClick={handleSaveLink} disabled={saving}>
               <Save className="w-4 h-4 mr-1" /> {saving ? "Saxlanılır..." : "Saxla"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Convert to Variety Dialog */}
+      <Dialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Məhsulu Variety-yə Çevir</DialogTitle>
+            <DialogDescription>
+              Bu əməliyyat "{productToConvert?.nameEn}" məhsulunu seçdiyiniz məhsulun variety-sinə çevirəcək.
+              Bütün əlaqəli datalar (AZ, EU, FAO, FPMA) yeni məhsula köçürüləcək.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4 space-y-4">
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-800">
+                <strong>Diqqət:</strong> Bu əməliyyat geri qaytarıla bilməz. 
+                "{productToConvert?.nameAz || productToConvert?.nameEn}" məhsulu silinəcək və 
+                seçdiyiniz məhsulun variety-si kimi əlavə olunacaq.
+              </p>
+            </div>
+            
+            <div>
+              <Label>Çevriləcək Məhsul</Label>
+              <div className="mt-1 p-3 bg-slate-100 rounded-lg">
+                <p className="font-medium">{productToConvert?.nameAz || productToConvert?.nameEn}</p>
+                <p className="text-sm text-slate-500">Slug: {productToConvert?.slug}</p>
+              </div>
+            </div>
+            
+            <div>
+              <Label>Hədəf Məhsul (variety olaraq bağlanacaq)</Label>
+              <Select value={targetProductId} onValueChange={setTargetProductId}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Məhsul seçin..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {allGlobalProducts
+                    .filter(gp => gp.id !== productToConvert?.id)
+                    .map((gp) => (
+                      <SelectItem key={gp.id} value={gp.id}>
+                        {gp.nameAz || gp.nameEn} ({gp.slug})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowConvertDialog(false); setProductToConvert(null); setTargetProductId(""); }}>
+              <X className="w-4 h-4 mr-1" /> Ləğv et
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleConvertToVariety} 
+              disabled={saving || !targetProductId}
+            >
+              <ArrowRightLeft className="w-4 h-4 mr-1" /> 
+              {saving ? "Çevrilir..." : "Variety-yə Çevir"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1012,7 +1115,7 @@ export default function GlobalProductsPage() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right space-x-2">
                           <Button
                             variant="outline"
                             size="sm"
@@ -1020,6 +1123,14 @@ export default function GlobalProductsPage() {
                           >
                             <Edit className="w-4 h-4 mr-1" />
                             Redaktə
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => { setProductToConvert(product); setShowConvertDialog(true); }}
+                            title="Variety-yə çevir"
+                          >
+                            <ArrowRightLeft className="w-4 h-4" />
                           </Button>
                         </TableCell>
                       </TableRow>
