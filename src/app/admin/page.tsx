@@ -13,6 +13,9 @@ import {
   Globe,
   RefreshCw,
   GitCompare,
+  Layers,
+  Link2,
+  BarChart3,
 } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 
@@ -25,7 +28,12 @@ async function getStats() {
     euCountriesCount,
     euProductsCount,
     euPricesCount,
-    matchedProductsCount
+    matchedProductsCount,
+    // Global stats
+    globalProductsCount,
+    globalCountriesCount,
+    fpmaCommoditiesCount,
+    faoProductsCount,
   ] = await Promise.all([
     prisma.product.count(),
     prisma.market.count(),
@@ -35,6 +43,11 @@ async function getStats() {
     prisma.euProduct.count(),
     prisma.euPrice.count(),
     prisma.euProduct.count({ where: { localProductId: { not: null } } }),
+    // Global stats
+    prisma.globalProduct.count(),
+    prisma.globalCountry.count(),
+    prisma.fpmaCommodity.count(),
+    prisma.faoProduct.count(),
   ]);
 
   return { 
@@ -45,7 +58,11 @@ async function getStats() {
     euCountriesCount,
     euProductsCount,
     euPricesCount,
-    matchedProductsCount
+    matchedProductsCount,
+    globalProductsCount,
+    globalCountriesCount,
+    fpmaCommoditiesCount,
+    faoProductsCount,
   };
 }
 
@@ -165,6 +182,80 @@ export default async function AdminPage() {
         </div>
       </div>
 
+      {/* Global Data Section - NEW */}
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+          <Layers className="w-5 h-5 text-indigo-600" />
+          Global Data İdarəetmə
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Link href="/admin/global-products">
+            <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 border-indigo-200 hover:shadow-md transition-all cursor-pointer">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-indigo-600 font-medium">Global Məhsullar</p>
+                    <p className="text-2xl font-bold text-indigo-900">{stats.globalProductsCount}</p>
+                  </div>
+                  <Package className="w-8 h-8 text-indigo-400" />
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+          
+          <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100/50 border-cyan-200">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-cyan-600 font-medium">Global Ölkələr</p>
+                  <p className="text-2xl font-bold text-cyan-900">{stats.globalCountriesCount}</p>
+                </div>
+                <Globe className="w-8 h-8 text-cyan-400" />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-gradient-to-br from-orange-50 to-orange-100/50 border-orange-200">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-orange-600 font-medium">FAO FPMA</p>
+                  <p className="text-2xl font-bold text-orange-900">{stats.fpmaCommoditiesCount}</p>
+                </div>
+                <BarChart3 className="w-8 h-8 text-orange-400" />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-gradient-to-br from-teal-50 to-teal-100/50 border-teal-200">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-teal-600 font-medium">FAOSTAT</p>
+                  <p className="text-2xl font-bold text-teal-900">{stats.faoProductsCount}</p>
+                </div>
+                <Database className="w-8 h-8 text-teal-400" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        
+        <div className="mt-4 flex gap-3">
+          <Button variant="default" size="sm" className="bg-indigo-600 hover:bg-indigo-700" asChild>
+            <Link href="/admin/global-products">
+              <Layers className="w-4 h-4 mr-2" />
+              Global Məhsullar
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/admin/global-products">
+              <Link2 className="w-4 h-4 mr-2" />
+              Məhsul Əlaqələndirmə
+            </Link>
+          </Button>
+        </div>
+      </div>
+
       {/* EU Data Section */}
       <div>
         <h2 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
@@ -172,29 +263,33 @@ export default async function AdminPage() {
           EU Data İnteqrasiyası
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-blue-600 font-medium">EU Ölkələr</p>
-                  <p className="text-2xl font-bold text-blue-900">{stats.euCountriesCount}</p>
+          <Link href="/admin/eu-products">
+            <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200 hover:shadow-md transition-all cursor-pointer">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-blue-600 font-medium">EU Ölkələr</p>
+                    <p className="text-2xl font-bold text-blue-900">{stats.euCountriesCount}</p>
+                  </div>
+                  <Globe className="w-8 h-8 text-blue-400" />
                 </div>
-                <Globe className="w-8 h-8 text-blue-400" />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Link>
           
-          <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-200">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-purple-600 font-medium">EU Məhsullar</p>
-                  <p className="text-2xl font-bold text-purple-900">{stats.euProductsCount}</p>
+          <Link href="/admin/eu-products">
+            <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-200 hover:shadow-md transition-all cursor-pointer">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-purple-600 font-medium">EU Məhsullar</p>
+                    <p className="text-2xl font-bold text-purple-900">{stats.euProductsCount}</p>
+                  </div>
+                  <Package className="w-8 h-8 text-purple-400" />
                 </div>
-                <Package className="w-8 h-8 text-purple-400" />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Link>
           
           <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-200">
             <CardContent className="p-4">
@@ -224,13 +319,14 @@ export default async function AdminPage() {
         <div className="mt-4 flex gap-3">
           <Button variant="outline" size="sm" asChild>
             <Link href="/admin/eu-products">
-              EU Məhsulları İdarə Et
+              <Package className="w-4 h-4 mr-2" />
+              EU Məhsulları
             </Link>
           </Button>
           <Button variant="outline" size="sm" asChild>
             <Link href="/admin/eu-sync">
               <RefreshCw className="w-4 h-4 mr-2" />
-              Data Sinxronizasiyası
+              EU Sinxronizasiya
             </Link>
           </Button>
         </div>

@@ -16,6 +16,9 @@ import {
   Leaf,
   Globe,
   Layers,
+  RefreshCw,
+  Upload,
+  Link2,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -42,10 +45,17 @@ const dashboardNavItems = [
 
 const adminNavItems = [
   { href: "/admin", label: "İdarə paneli", icon: Home },
-  { href: "/admin/upload", label: "Məlumat yüklə", icon: Package },
-  { href: "/admin/global-products", label: "Global Məhsullar", icon: Globe },
+  { href: "/admin/upload", label: "Məlumat yüklə", icon: Upload },
+  // Global bölmə
+  { href: "/admin/global-products", label: "Global Məhsullar", icon: Layers },
+  // AZ Data
   { href: "/admin/products", label: "AZ Məhsullar", icon: Package },
-  { href: "/admin/markets", label: "Bazarlar", icon: MapPin },
+  { href: "/admin/markets", label: "AZ Bazarlar", icon: MapPin },
+  { href: "/admin/prices", label: "AZ Qiymətlər", icon: TrendingUp },
+  // EU Data
+  { href: "/admin/eu-products", label: "EU Məhsulları", icon: Globe },
+  { href: "/admin/eu-sync", label: "EU Sinxronizasiya", icon: RefreshCw },
+  // System
   { href: "/admin/users", label: "İstifadəçilər", icon: Settings },
 ];
 
