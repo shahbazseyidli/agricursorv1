@@ -238,9 +238,15 @@ Stored in `Unit` table with conversion rates.
 
 ### 6.3 CONVERSION LOGIC
 
-**Currency conversion:**
+**Currency conversion (USD-based):**
 ```
-priceInTargetCurrency = priceInAZN / currency.rateToAZN * targetCurrency.rateToAZN
+priceInTargetCurrency = priceInSourceCurrency / sourceCurrency.rateToUSD * targetCurrency.rateToUSD
+```
+
+Example: Convert 100 TRY to EUR
+```
+priceInUSD = 100 TRY / 32.0 = 3.125 USD
+priceInEUR = 3.125 USD * 0.92 = 2.875 EUR
 ```
 
 **Unit conversion:**

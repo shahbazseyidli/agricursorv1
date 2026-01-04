@@ -46,7 +46,7 @@ interface Currency {
   code: string;
   symbol: string;
   nameAz: string;
-  rateToAZN: number;
+  rateToUSD: number;
 }
 
 interface ProductInfo {

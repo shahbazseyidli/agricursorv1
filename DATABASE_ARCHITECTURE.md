@@ -135,12 +135,12 @@ Currency exchange rates (from CBAR and ExchangeRate-API).
 model Currency {
   id          String   @id @default(cuid())
   code        String   @unique // AZN, EUR, USD
-  symbol      String   // ₼, €, $
+  symbol      String   // $, €, ₼
   nameEn      String   @map("name_en")
   nameAz      String?  @map("name_az")
-  rateToAZN   Decimal  @map("rate_to_azn") // Exchange rate to AZN
-  rateToEUR   Decimal  @map("rate_to_eur") // Exchange rate to EUR
-  source      String?  // CBAR, ExchangeRate-API
+  rateToUSD   Decimal  @map("rate_to_usd") // Exchange rate: 1 USD = X of this currency
+  source      String?  // ExchangeRate-API
+  isBase      Boolean  @default(false) @map("is_base") // USD is base
   isActive    Boolean  @default(true) @map("is_active")
   updatedAt   DateTime @updatedAt
 }
@@ -164,10 +164,9 @@ Historical exchange rate tracking.
 model FxRateHistory {
   id           String   @id @default(cuid())
   currencyCode String   @map("currency_code")
-  rateToAZN    Decimal  @map("rate_to_azn")
-  rateToEUR    Decimal  @map("rate_to_eur")
-  date         DateTime
-  source       String?
+  rateToUSD    Decimal  @map("rate_to_usd") // 1 USD = X of this currency
+  fetchedAt    DateTime @map("fetched_at")
+  source       String?  // exchangerate-api
   createdAt    DateTime @default(now())
 
   @@unique([currencyCode, date])
@@ -554,8 +553,7 @@ model EuPrice {
 | agro.gov.az | Price | Weekly | priceMin, priceAvg, priceMax |
 | Eurostat | EuPrice | Yearly | price (annual average) |
 | EC Agrifood | EuPrice | Weekly | price (weekly) |
-| CBAR | Currency | 4x/day | rateToAZN (official) |
-| ExchangeRate-API | Currency | Daily | 166 world currencies |
+| ExchangeRate-API | Currency | Daily | 166+ world currencies (USD-based) |
 
 ---
 
@@ -670,8 +668,9 @@ const currencies = await prisma.currency.findMany({
   orderBy: { code: "asc" }
 });
 
-// Convert price from AZN to EUR
-const priceInEur = priceInAzn / currency.rateToAZN * currency.rateToEUR;
+// Convert price from TRY to EUR (via USD)
+const priceInUSD = priceInTRY / tryCurrency.rateToUSD;  // TRY → USD
+const priceInEUR = priceInUSD * eurCurrency.rateToUSD;  // USD → EUR
 ```
 
 ### Unit Conversion

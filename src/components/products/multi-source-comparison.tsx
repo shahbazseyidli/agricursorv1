@@ -136,7 +136,7 @@ interface Selection {
 }
 
 interface ConversionRates {
-  currencies: Record<string, { rateToAZN: number; code: string; symbol: string }>;
+  currencies: Record<string, { rateToUSD: number; code: string; symbol: string }>;
   units: Record<string, { conversionRate: number; code: string; baseUnit: string }>;
 }
 
@@ -253,7 +253,7 @@ export function MultiSourceComparison({
     return country?.dataSources || [];
   };
 
-  // Convert price to target currency and unit
+  // Convert price to target currency and unit (USD-based)
   const convertPrice = (
     price: number,
     fromCurrency: string,
@@ -261,13 +261,15 @@ export function MultiSourceComparison({
   ): number => {
     if (!conversionRates) return price;
 
-    const fromCurrencyRate = conversionRates.currencies[fromCurrency]?.rateToAZN || 1;
-    const toCurrencyRate = conversionRates.currencies[targetCurrency]?.rateToAZN || 1;
+    // USD-based conversion: 1 USD = X currency
+    const fromCurrencyRate = conversionRates.currencies[fromCurrency]?.rateToUSD || 1;
+    const toCurrencyRate = conversionRates.currencies[targetCurrency]?.rateToUSD || 1;
     const fromUnitRate = conversionRates.units[fromUnit]?.conversionRate || 1;
     const toUnitRate = conversionRates.units[targetUnit]?.conversionRate || 1;
 
-    const priceInAZN = price / fromCurrencyRate;
-    const priceInTargetCurrency = priceInAZN * toCurrencyRate;
+    // Convert: fromCurrency → USD → toCurrency
+    const priceInUSD = price / fromCurrencyRate;
+    const priceInTargetCurrency = priceInUSD * toCurrencyRate;
     const pricePerBaseUnit = priceInTargetCurrency * fromUnitRate;
     const finalPrice = pricePerBaseUnit / toUnitRate;
 

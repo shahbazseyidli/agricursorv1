@@ -4,7 +4,8 @@
  * Frontend-side price conversion for currency and unit.
  * Uses conversion rates fetched from API.
  * 
- * Base: AZN/kg
+ * Base Currency: USD
+ * Base Unit: kg
  */
 
 export interface ConversionRates {
@@ -12,8 +13,8 @@ export interface ConversionRates {
     [code: string]: {
       code: string;
       symbol: string;
-      rateToAZN: number; // 1 AZN = X of this currency
-      rateFromAZN: number; // 1 of this currency = X AZN
+      rateToUSD: number; // 1 USD = X of this currency
+      rateFromUSD: number; // 1 of this currency = X USD
     };
   };
   units: {
@@ -29,12 +30,13 @@ export interface ConversionRates {
 
 export interface PriceData {
   value: number;
-  currency: string; // Original currency (AZN, EUR, USD)
+  currency: string; // Original currency (USD, EUR, AZN)
   unit: string; // Original unit (kg, 100kg, tonne)
 }
 
 /**
  * Convert price from original currency/unit to target currency/unit
+ * All conversions go through USD as the base currency
  */
 export function convertPrice(
   price: PriceData,
@@ -52,38 +54,27 @@ export function convertPrice(
     return price.value;
   }
 
-  // Step 1: Convert to base currency (AZN)
+  // Step 1: Convert to base currency (USD)
   const sourceRate = rates.currencies[price.currency];
-  const priceInAZN = price.value * sourceRate.rateFromAZN;
+  const priceInUSD = price.value * sourceRate.rateFromUSD;
 
-  // Step 2: Convert to target currency
+  // Step 2: Convert from USD to target currency
   const targetCurrencyRate = rates.currencies[targetCurrency];
-  const priceInTargetCurrency = priceInAZN * targetCurrencyRate.rateToAZN;
+  const priceInTargetCurrency = priceInUSD * targetCurrencyRate.rateToUSD;
 
   // Step 3: Convert unit (from original to kg, then to target)
   const sourceUnit = rates.units[normalizeUnit(price.unit)];
   const targetUnitData = rates.units[targetUnit];
 
   // Convert to kg first
-  // If source is 100kg, conversionRate = 0.01, so pricePerKg = price * 0.01 * 100 = price
-  // Actually: price per 100kg → price per kg = price / 100
-  // conversionRate for 100kg = 0.01 means: 1kg = 0.01 * 100kg base
-  // So to get kg from 100kg: price_per_kg = price_per_100kg / 100
-  
   let pricePerKg: number;
   if (sourceUnit.baseUnit === "kg") {
-    // conversionRate = how many kg in 1 of this unit
-    // For 100kg: conversionRate = 0.01, meaning 1 unit of 100kg = 100 kg
-    // Wait, that's inverted. Let me reconsider.
-    // Our Unit table has: 100kg with conversionRate = 0.01
-    // This means: to convert FROM 100kg TO kg, multiply by 100 (or divide by 0.01)
     pricePerKg = priceInTargetCurrency / (1 / sourceUnit.conversionRate);
   } else {
     pricePerKg = priceInTargetCurrency;
   }
 
   // Step 4: Convert from kg to target unit
-  // If target is 100kg, we need: pricePerKg * 100
   let finalPrice: number;
   if (targetUnitData.baseUnit === "kg") {
     finalPrice = pricePerKg * (1 / targetUnitData.conversionRate);
@@ -96,6 +87,7 @@ export function convertPrice(
 
 /**
  * Simplified conversion: just currency and unit multipliers
+ * All currency conversions go through USD
  */
 export function convertPriceSimple(
   price: number,
@@ -105,12 +97,13 @@ export function convertPriceSimple(
   toUnit: string,
   rates: ConversionRates
 ): number {
-  // Currency conversion
+  // Currency conversion (via USD)
   let convertedPrice = price;
 
   if (fromCurrency !== toCurrency) {
-    const fromRate = rates.currencies[fromCurrency]?.rateFromAZN || 1;
-    const toRate = rates.currencies[toCurrency]?.rateToAZN || 1;
+    // Convert: fromCurrency → USD → toCurrency
+    const fromRate = rates.currencies[fromCurrency]?.rateFromUSD || 1; // X fromCurrency = 1 USD
+    const toRate = rates.currencies[toCurrency]?.rateToUSD || 1; // 1 USD = X toCurrency
     convertedPrice = price * fromRate * toRate;
   }
 
@@ -124,10 +117,6 @@ export function convertPriceSimple(
 
     if (fromUnitData && toUnitData) {
       // Convert to kg first, then to target
-      // conversionRate: how to convert FROM this unit TO base (kg)
-      // For 100kg: rate = 0.01 means price_per_100kg / 100 = price_per_kg
-      // For tonne: rate = 0.001 means price_per_tonne / 1000 = price_per_kg
-      
       const pricePerKg = convertedPrice * fromUnitData.conversionRate;
       convertedPrice = pricePerKg / toUnitData.conversionRate;
     }
@@ -194,15 +183,16 @@ export function getUnitMultiplier(fromUnit: string, toUnit: string, rates: Conve
 }
 
 /**
- * Default conversion rates (fallback)
+ * Default conversion rates (fallback) - USD based
  */
 export const DEFAULT_RATES: ConversionRates = {
   currencies: {
-    AZN: { code: "AZN", symbol: "₼", rateToAZN: 1, rateFromAZN: 1 },
-    USD: { code: "USD", symbol: "$", rateToAZN: 0.59, rateFromAZN: 1.70 },
-    EUR: { code: "EUR", symbol: "€", rateToAZN: 0.55, rateFromAZN: 1.82 },
-    RUB: { code: "RUB", symbol: "₽", rateToAZN: 53.0, rateFromAZN: 0.019 },
-    TRY: { code: "TRY", symbol: "₺", rateToAZN: 19.0, rateFromAZN: 0.053 },
+    USD: { code: "USD", symbol: "$", rateToUSD: 1, rateFromUSD: 1 },
+    EUR: { code: "EUR", symbol: "€", rateToUSD: 0.92, rateFromUSD: 1.09 },
+    AZN: { code: "AZN", symbol: "₼", rateToUSD: 1.70, rateFromUSD: 0.59 },
+    RUB: { code: "RUB", symbol: "₽", rateToUSD: 90.0, rateFromUSD: 0.011 },
+    TRY: { code: "TRY", symbol: "₺", rateToUSD: 32.0, rateFromUSD: 0.031 },
+    GBP: { code: "GBP", symbol: "£", rateToUSD: 0.79, rateFromUSD: 1.27 },
   },
   units: {
     kg: { code: "kg", nameAz: "Kiloqram", nameEn: "Kilogram", conversionRate: 1, baseUnit: "kg" },
@@ -212,8 +202,3 @@ export const DEFAULT_RATES: ConversionRates = {
     g: { code: "g", nameAz: "Qram", nameEn: "Gram", conversionRate: 1000, baseUnit: "kg" },
   },
 };
-
-
-
-
-

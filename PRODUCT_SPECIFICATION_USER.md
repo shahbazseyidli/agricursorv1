@@ -699,9 +699,9 @@ GET /api/products/apple/prices?country=be&range=all
 ```json
 {
   "data": [
-    { "code": "AZN", "symbol": "₼", "nameAz": "Azərbaycan manatı", "rateToAZN": 1 },
-    { "code": "EUR", "symbol": "€", "nameAz": "Avro", "rateToAZN": 0.54 },
-    { "code": "USD", "symbol": "$", "nameAz": "ABŞ dolları", "rateToAZN": 0.59 }
+    { "code": "USD", "symbol": "$", "nameAz": "ABŞ dolları", "rateToUSD": 1 },
+    { "code": "EUR", "symbol": "€", "nameAz": "Avro", "rateToUSD": 0.92 },
+    { "code": "AZN", "symbol": "₼", "nameAz": "Azərbaycan manatı", "rateToUSD": 1.70 }
   ]
 }
 ```

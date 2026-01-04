@@ -36,39 +36,39 @@ export async function GET(request: NextRequest) {
       endYear
     });
     
-    // Get currency rate if needed
+    // Get currency rate if needed (USD-based)
     let exchangeRate = 1;
-    if (currency !== "EUR" && currency !== "AZN") {
+    if (currency !== "EUR" && currency !== "USD") {
       const currencyRecord = await prisma.currency.findUnique({
         where: { code: currency }
       });
       if (currencyRecord) {
-        exchangeRate = currencyRecord.rateToAZN;
+        exchangeRate = currencyRecord.rateToUSD;
       }
     }
     
-    // Get EUR to AZN rate for conversion display
+    // Get EUR to USD rate for conversion display
     const eurCurrency = await prisma.currency.findUnique({
       where: { code: "EUR" }
     });
-    const eurToAzn = eurCurrency?.rateToAZN || 1.87; // Default rate
+    const eurToUsd = eurCurrency?.rateToUSD || 0.92; // Default rate (1 USD = 0.92 EUR)
     
-    // Format response
+    // Format response (USD-based)
     const response = {
       azData: comparison.azData.map(d => ({
         ...d,
-        priceInSelectedCurrency: currency === "AZN" ? d.price : d.price / exchangeRate
+        priceInSelectedCurrency: currency === "USD" ? d.price : d.price / exchangeRate
       })),
       euData: comparison.euData.map(d => ({
         ...d,
-        priceInAZN: d.price * eurToAzn,
-        priceInSelectedCurrency: currency === "EUR" ? d.price : d.price * eurToAzn / exchangeRate
+        priceInUSD: d.price / eurToUsd, // Convert EUR to USD
+        priceInSelectedCurrency: currency === "EUR" ? d.price : d.price / eurToUsd * exchangeRate
       })),
       comparison: comparison.comparison ? {
         ...comparison.comparison,
-        euAvgInAZN: Math.round(comparison.comparison.euAvg * eurToAzn * 100) / 100,
+        euAvgInUSD: Math.round(comparison.comparison.euAvg / eurToUsd * 100) / 100,
         currency,
-        exchangeRate: currency === "EUR" ? 1 : (currency === "AZN" ? eurToAzn : exchangeRate)
+        exchangeRate: currency === "EUR" ? 1 : (currency === "USD" ? 1 / eurToUsd : exchangeRate)
       } : null,
       metadata: {
         localProductId,
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
         startYear,
         endYear,
         currency,
-        eurToAzn
+        eurToUsd
       }
     };
     

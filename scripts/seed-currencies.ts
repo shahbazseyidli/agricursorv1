@@ -1,29 +1,24 @@
-// Seed script to initialize currencies
+// Seed script to initialize currencies (USD-based)
 // Run with: npx ts-node scripts/seed-currencies.ts
+// 
+// NOTE: This script is now obsolete. Use the API instead:
+// POST /api/currencies/update-rates
+// This will fetch all 166+ currencies from ExchangeRate-API
 
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+// USD-based rates: 1 USD = X of this currency
 const currencies = [
-  {
-    code: "AZN",
-    symbol: "₼",
-    nameAz: "Azərbaycan Manatı",
-    nameEn: "Azerbaijani Manat",
-    nameRu: "Азербайджанский манат",
-    rateToAZN: 1,
-    isBase: true,
-    isActive: true,
-  },
   {
     code: "USD",
     symbol: "$",
     nameAz: "ABŞ Dolları",
     nameEn: "US Dollar",
     nameRu: "Доллар США",
-    rateToAZN: 0.588, // 1 AZN = 0.588 USD (approximate)
-    isBase: false,
+    rateToUSD: 1,
+    isBase: true,
     isActive: true,
   },
   {
@@ -32,7 +27,17 @@ const currencies = [
     nameAz: "Avro",
     nameEn: "Euro",
     nameRu: "Евро",
-    rateToAZN: 0.54, // 1 AZN = 0.54 EUR (approximate)
+    rateToUSD: 0.92, // 1 USD = 0.92 EUR
+    isBase: false,
+    isActive: true,
+  },
+  {
+    code: "AZN",
+    symbol: "₼",
+    nameAz: "Azərbaycan Manatı",
+    nameEn: "Azerbaijani Manat",
+    nameRu: "Азербайджанский манат",
+    rateToUSD: 1.70, // 1 USD = 1.70 AZN
     isBase: false,
     isActive: true,
   },
@@ -42,7 +47,7 @@ const currencies = [
     nameAz: "Rusiya Rublu",
     nameEn: "Russian Ruble",
     nameRu: "Российский рубль",
-    rateToAZN: 53.5, // 1 AZN = 53.5 RUB (approximate)
+    rateToUSD: 90.0, // 1 USD = 90 RUB
     isBase: false,
     isActive: true,
   },
@@ -52,7 +57,7 @@ const currencies = [
     nameAz: "Türk Lirəsi",
     nameEn: "Turkish Lira",
     nameRu: "Турецкая лира",
-    rateToAZN: 20.1, // 1 AZN = 20.1 TRY (approximate)
+    rateToUSD: 32.0, // 1 USD = 32 TRY
     isBase: false,
     isActive: true,
   },
@@ -62,14 +67,14 @@ const currencies = [
     nameAz: "Britaniya Funtu",
     nameEn: "British Pound",
     nameRu: "Британский фунт",
-    rateToAZN: 0.47, // 1 AZN = 0.47 GBP (approximate)
+    rateToUSD: 0.79, // 1 USD = 0.79 GBP
     isBase: false,
     isActive: true,
   },
 ];
 
 async function main() {
-  console.log("Seeding currencies...");
+  console.log("Seeding currencies (USD-based)...");
 
   for (const currency of currencies) {
     const result = await prisma.currency.upsert({
@@ -79,7 +84,7 @@ async function main() {
         nameAz: currency.nameAz,
         nameEn: currency.nameEn,
         nameRu: currency.nameRu,
-        rateToAZN: currency.rateToAZN,
+        rateToUSD: currency.rateToUSD,
         isBase: currency.isBase,
         isActive: currency.isActive,
         lastUpdated: new Date(),
@@ -89,10 +94,11 @@ async function main() {
         lastUpdated: new Date(),
       },
     });
-    console.log(`  ✓ ${result.code}: ${result.symbol} (rate: ${result.rateToAZN})`);
+    console.log(`  ✓ ${result.code}: ${result.symbol} (rate: 1 USD = ${result.rateToUSD} ${result.code})`);
   }
 
   console.log("\n✅ Currencies seeded successfully!");
+  console.log("\n💡 Tip: Run POST /api/currencies/update-rates to fetch all 166+ currencies from API");
 }
 
 main()
@@ -103,11 +109,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
-
-
-
-
-
-
-

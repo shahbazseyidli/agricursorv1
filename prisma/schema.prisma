@@ -438,13 +438,13 @@ model Unit {
 
 model Currency {
   id          String   @id @default(cuid())
-  code        String   @unique // AZN, USD, EUR, RUB, TRY
-  symbol      String // ₼, $, €, ₽, ₺
+  code        String   @unique // USD, EUR, AZN, RUB, TRY
+  symbol      String // $, €, ₼, ₽, ₺
   nameAz      String   @map("name_az")
   nameEn      String?  @map("name_en")
   nameRu      String?  @map("name_ru")
-  rateToAZN   Float    @default(1) @map("rate_to_azn") // Exchange rate to AZN
-  isBase      Boolean  @default(false) @map("is_base") // Is this the base currency (AZN)
+  rateToUSD   Float    @default(1) @map("rate_to_usd") // Exchange rate: 1 USD = X of this currency
+  isBase      Boolean  @default(false) @map("is_base") // Is this the base currency (USD)
   isActive    Boolean  @default(true) @map("is_active")
   lastUpdated DateTime @default(now()) @map("last_updated")
   createdAt   DateTime @default(now())
@@ -456,8 +456,8 @@ model Currency {
 model FxRateHistory {
   id           String   @id @default(cuid())
   currencyCode String   @map("currency_code")
-  rateToAZN    Float    @map("rate_to_azn")
-  source       String   @default("cbar") // API source: cbar, exchangerate-api
+  rateToUSD    Float    @map("rate_to_usd")
+  source       String   @default("exchangerate-api") // API source: exchangerate-api, cbar
   fetchedAt    DateTime @default(now()) @map("fetched_at")
   createdAt    DateTime @default(now())
 

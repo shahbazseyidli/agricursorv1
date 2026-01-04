@@ -27,15 +27,15 @@ export async function GET(req: Request) {
       );
     }
     
-    // Get currency conversion rate
+    // Get currency conversion rate (USD-based)
     let fxRate = 1;
-    let currencySymbol = "₼";
-    if (targetCurrency !== "AZN") {
+    let currencySymbol = "$";
+    if (targetCurrency !== "USD") {
       const currency = await prisma.currency.findUnique({
         where: { code: targetCurrency },
       });
       if (currency) {
-        fxRate = currency.rateToAZN;
+        fxRate = currency.rateToUSD;
         currencySymbol = currency.symbol;
       }
     }

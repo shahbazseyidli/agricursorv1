@@ -3,17 +3,18 @@ import { prisma } from "@/lib/prisma";
 import { subMonths, subYears, subDays, startOfYear, format } from "date-fns";
 
 // Helper to convert price using FX rate and unit
+// All prices are stored in local currency, convert via USD
 function convertPriceWithUnit(price: number, fxRate: number, unitRate: number): number {
-  // price is in AZN/kg
-  // fxRate: how many target currency = 1 AZN
+  // price is in source currency/kg
+  // fxRate: 1 USD = X target currency
   // unitRate: how many target units = 1 kg
   // Final price = price * fxRate / unitRate
   return (price * fxRate) / unitRate;
 }
 
-// Wrapper for backward compatibility
-function convertPrice(price: number, rateToAZN: number): number {
-  return price * rateToAZN;
+// Wrapper for backward compatibility (USD-based)
+function convertPrice(price: number, rateToUSD: number): number {
+  return price * rateToUSD;
 }
 
 // Helper to convert EU price (€/100kg to €/kg)
@@ -94,15 +95,15 @@ export async function GET(
       }
     }
 
-    // Get currency conversion rate
+    // Get currency conversion rate (USD-based)
     let fxRate = 1;
-    let currencySymbol = "₼";
-    if (targetCurrency !== "AZN") {
+    let currencySymbol = "$";
+    if (targetCurrency !== "USD") {
       const currency = await prisma.currency.findUnique({
         where: { code: targetCurrency },
       });
       if (currency) {
-        fxRate = currency.rateToAZN;
+        fxRate = currency.rateToUSD;
         currencySymbol = currency.symbol;
       }
     }

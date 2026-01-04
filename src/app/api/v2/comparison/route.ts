@@ -141,8 +141,8 @@ export async function GET(request: NextRequest) {
         currencies.map(c => [c.code, {
           code: c.code,
           symbol: c.symbol,
-          rateToAZN: c.rateToAZN,
-          rateFromAZN: c.rateToAZN === 0 ? 1 : 1 / c.rateToAZN,
+          rateToUSD: c.rateToUSD,
+          rateFromUSD: c.rateToUSD === 0 ? 1 : 1 / c.rateToUSD,
         }])
       ),
       units: Object.fromEntries(
