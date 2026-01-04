@@ -83,7 +83,21 @@ async function getProductData(slug: string, countryCode?: string) {
     const azProduct = globalProduct.localProducts[0];
     
     // Determine which country to show by default
-    const selectedCountry = countryCode?.toUpperCase() || "AZ";
+    // Priority: 1) URL country, 2) AZ if has data, 3) First country with FPMA data
+    let selectedCountry = countryCode?.toUpperCase();
+    
+    if (!selectedCountry) {
+      // No country in URL - find first country with data
+      if (azProduct) {
+        selectedCountry = "AZ"; // AZ has data
+      } else {
+        // Check FPMA countries
+        const fpmaCountries = globalProduct.fpmaCommodities.flatMap(c => 
+          c.series.filter(s => s.prices && s.prices.length > 0).map(s => s.country.iso2 || s.country.iso3)
+        );
+        selectedCountry = fpmaCountries[0]?.toUpperCase() || "AZ";
+      }
+    }
     
     // Get markets (only for AZ)
     let markets: Awaited<ReturnType<typeof prisma.market.findMany>> = [];

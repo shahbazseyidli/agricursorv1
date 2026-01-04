@@ -204,14 +204,18 @@ export async function GET(
             }))
           )].map(s => JSON.parse(s));
 
-          // Get unique markets
-          const uniqueMarkets = [...new Set(allSeries
-            .map(s => JSON.stringify({
-              id: s.market.id,
-              name: s.market.name,
-              hasData: true
-            }))
-          )].map(s => JSON.parse(s));
+          // Get unique markets by name (not ID, since same market name can exist for different commodities)
+          const marketsByName = new Map<string, { id: string; name: string; hasData: boolean }>();
+          allSeries.forEach(s => {
+            if (!marketsByName.has(s.market.name)) {
+              marketsByName.set(s.market.name, {
+                id: s.market.id,
+                name: s.market.name,
+                hasData: true
+              });
+            }
+          });
+          const uniqueMarkets = Array.from(marketsByName.values());
 
           // Format for chart - normalize all prices to per kg
           const chartData = allPrices.map(p => {

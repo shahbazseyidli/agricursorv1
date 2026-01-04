@@ -169,10 +169,22 @@ export function ProductPageClient({
   // GlobalMarket filter (for FPMA data)
   const [selectedFpmaMarket, setSelectedFpmaMarket] = useState<string>("");
   
-  // Data source state - default to first available source
-  const [selectedDataSource, setSelectedDataSource] = useState<string>(
-    dataSources.length > 0 ? dataSources[0].code : "AGRO_AZ"
-  );
+  // Data source state - auto-select based on country
+  const getDefaultDataSource = () => {
+    if (selectedCountry.toUpperCase() === "AZ") {
+      // Azerbaijan - prefer AGRO_AZ
+      const azSource = dataSources.find(ds => ds.code === "AGRO_AZ");
+      return azSource ? "AGRO_AZ" : (dataSources[0]?.code || "AGRO_AZ");
+    } else {
+      // Other countries - prefer FAO_FPMA, then EUROSTAT, then FAOSTAT
+      const fpmaSource = dataSources.find(ds => ds.code === "FAO_FPMA");
+      const euSource = dataSources.find(ds => ds.code === "EUROSTAT");
+      const faoSource = dataSources.find(ds => ds.code === "FAOSTAT");
+      return fpmaSource?.code || euSource?.code || faoSource?.code || (dataSources[0]?.code || "FAO_FPMA");
+    }
+  };
+  
+  const [selectedDataSource, setSelectedDataSource] = useState<string>(getDefaultDataSource());
   
   // Use dataSources from props (available data sources for this product)
   const DATA_SOURCES = dataSources.length > 0 ? dataSources : [
@@ -220,6 +232,30 @@ export function ProductPageClient({
     // Reset market-related filters when country changes
     setSelectedMarket("");
     setSelectedMarketType("");
+    setSelectedFpmaMarket("");
+    // Auto-select appropriate data source based on country
+    if (countryCode.toUpperCase() === "AZ") {
+      // Azerbaijan - prefer AGRO_AZ if available
+      const azSource = dataSources.find(ds => ds.code === "AGRO_AZ");
+      if (azSource) {
+        setSelectedDataSource("AGRO_AZ");
+      }
+    } else {
+      // Other countries - prefer FAO_FPMA if available
+      const fpmaSource = dataSources.find(ds => ds.code === "FAO_FPMA");
+      if (fpmaSource) {
+        setSelectedDataSource("FAO_FPMA");
+      } else {
+        // Try EUROSTAT, then FAOSTAT
+        const euSource = dataSources.find(ds => ds.code === "EUROSTAT");
+        const faoSource = dataSources.find(ds => ds.code === "FAOSTAT");
+        if (euSource) {
+          setSelectedDataSource("EUROSTAT");
+        } else if (faoSource) {
+          setSelectedDataSource("FAOSTAT");
+        }
+      }
+    }
     // Navigate to same product with new country
     router.push(`/products/${product.slug}?country=${countryCode.toLowerCase()}`);
   };
