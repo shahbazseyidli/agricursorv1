@@ -21,6 +21,46 @@ function convertEuPriceToKg(pricePerHundredKg: number): number {
   return pricePerHundredKg / 100;
 }
 
+// Helper to normalize FPMA price to per kg based on measure_unit
+function normalizeFpmaPriceToKg(price: number, measureUnit: string): number {
+  if (!measureUnit) return price;
+  
+  const unit = measureUnit.toLowerCase().trim();
+  
+  // Parse numeric values from unit strings like "100 kg", "10 Kg", "2.5 kg"
+  const kgMatch = unit.match(/^([\d.]+)\s*kg$/i);
+  if (kgMatch) {
+    const kgAmount = parseFloat(kgMatch[1]);
+    return price / kgAmount; // e.g., 362 per 100kg → 3.62 per kg
+  }
+  
+  // Handle specific units
+  if (unit === "kg" || unit === "1 kg") return price;
+  if (unit === "100 kg") return price / 100;
+  if (unit === "10 kg") return price / 10;
+  if (unit === "50 kg") return price / 50;
+  if (unit === "25 kg") return price / 25;
+  if (unit === "tonne") return price / 1000;
+  if (unit === "lb" || unit === "libra") return price * 2.20462; // lb to kg
+  if (unit === "liter" || unit === "liters") return price; // assume 1L ≈ 1kg for liquids
+  
+  // Handle units with grams
+  const gmsMatch = unit.match(/^([\d.]+)\s*(gms|grams?)$/i);
+  if (gmsMatch) {
+    const grams = parseFloat(gmsMatch[1]);
+    return (price / grams) * 1000; // Convert to per kg
+  }
+  
+  // Spanish quintal (46 kg)
+  if (unit.includes("spanish quintal")) return price / 46;
+  
+  // Bolivian arroba (11.5 kg)
+  if (unit.includes("bolivian arroba")) return price / 11.5;
+  
+  // Default: return as is (for unknown units)
+  return price;
+}
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ slug: string }> }
@@ -33,7 +73,7 @@ export async function GET(
     const productTypeId = searchParams.get("productType");
     const range = searchParams.get("range") || "6m";
     const compareMarkets = searchParams.get("compareMarkets");
-    const targetCurrency = searchParams.get("currency") || "AZN";
+    const targetCurrency = searchParams.get("currency") || "USD";
     const targetUnit = searchParams.get("unit") || "kg";
     const isGuest = searchParams.get("guest") === "true";
     const countryCode = searchParams.get("country")?.toUpperCase() || "AZ";
@@ -173,26 +213,33 @@ export async function GET(
             }))
           )].map(s => JSON.parse(s));
 
-          // Format for chart
-          const chartData = allPrices.map(p => ({
-            date: p.date.toISOString().split("T")[0],
-            priceMin: p.priceNormalized || p.price,
-            priceAvg: p.priceNormalized || p.price,
-            priceMax: p.priceNormalized || p.price,
-            market: p.market.name,
-            marketId: p.market.id,
-            marketType: p.priceType,
-            priceStage: p.globalPriceStage?.code,
-            priceUsd: p.priceUsd,
-            originalCurrency: p.currency,
-          })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          // Format for chart - normalize all prices to per kg
+          const chartData = allPrices.map(p => {
+            const normalizedPrice = normalizeFpmaPriceToKg(p.price, p.measureUnit);
+            return {
+              date: p.date.toISOString().split("T")[0],
+              priceMin: normalizedPrice,
+              priceAvg: normalizedPrice,
+              priceMax: normalizedPrice,
+              market: p.market.name,
+              marketId: p.market.id,
+              marketType: p.priceType,
+              priceStage: p.globalPriceStage?.code,
+              priceUsd: p.priceUsd,
+              originalCurrency: p.currency,
+              originalUnit: p.measureUnit,
+            };
+          }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-          // Latest price
+          // Latest price - normalized to per kg
           const latestPriceData = allPrices[allPrices.length - 1];
+          const latestNormalizedPrice = latestPriceData 
+            ? normalizeFpmaPriceToKg(latestPriceData.price, latestPriceData.measureUnit)
+            : 0;
           const latestPrice = latestPriceData ? {
-            priceMin: latestPriceData.priceNormalized || latestPriceData.price,
-            priceAvg: latestPriceData.priceNormalized || latestPriceData.price,
-            priceMax: latestPriceData.priceNormalized || latestPriceData.price,
+            priceMin: latestNormalizedPrice,
+            priceAvg: latestNormalizedPrice,
+            priceMax: latestNormalizedPrice,
             date: latestPriceData.date,
             currency: latestPriceData.currency,
             currencySymbol: latestPriceData.currency,
@@ -200,13 +247,15 @@ export async function GET(
             marketType: latestPriceData.priceType,
           } : null;
 
-          // Price change
+          // Price change - use normalized prices
           let priceChange = null;
           if (allPrices.length >= 2) {
             const latest = allPrices[allPrices.length - 1];
             const prev = allPrices[Math.max(0, allPrices.length - 30)];
-            const change = (latest.priceNormalized || latest.price) - (prev.priceNormalized || prev.price);
-            const percentage = (change / (prev.priceNormalized || prev.price)) * 100;
+            const latestNorm = normalizeFpmaPriceToKg(latest.price, latest.measureUnit);
+            const prevNorm = normalizeFpmaPriceToKg(prev.price, prev.measureUnit);
+            const change = latestNorm - prevNorm;
+            const percentage = (change / prevNorm) * 100;
             priceChange = {
               value: change,
               percentage,

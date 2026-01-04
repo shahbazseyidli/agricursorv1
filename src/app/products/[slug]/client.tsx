@@ -182,8 +182,8 @@ export function ProductPageClient({
   // Only show markets filter for Azerbaijan with AGRO_AZ source
   const showMarketsFilter = currentCountry === "AZ" && markets.length > 0 && selectedDataSource === "AGRO_AZ";
   
-  // Currency state
-  const [selectedCurrency, setSelectedCurrency] = useState<string>("AZN");
+  // Currency state - default USD (prioritet: USD > EUR > digər)
+  const [selectedCurrency, setSelectedCurrency] = useState<string>("USD");
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [currencyInfo, setCurrencyInfo] = useState<{code: string; symbol: string; fxRate: number} | null>(null);
   
@@ -847,61 +847,25 @@ export function ProductPageClient({
                   </Select>
                 )}
 
-                {/* GlobalMarket Filter - for all data sources */}
-                <Select
-                  value={selectedFpmaMarket || "national_avg"}
-                  onValueChange={(v) => setSelectedFpmaMarket(v === "national_avg" ? "" : v)}
-                >
-                  <SelectTrigger className="w-48">
-                    <MapPin className="w-4 h-4 mr-2 text-slate-400" />
-                    <SelectValue placeholder="Bazar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {/* National Average options for AZ data */}
-                    {selectedDataSource === "AGRO_AZ" ? (
-                      <>
-                        <SelectItem value="national_avg_monthly">National Average (Aylıq)</SelectItem>
-                        <SelectItem value="national_avg_weekly">National Average (Həftəlik)</SelectItem>
-                      </>
-                    ) : (
-                      <>
-                        <SelectItem value="national_avg">National Average</SelectItem>
-                        {availableFpmaMarkets.length > 0 ? (
-                          availableFpmaMarkets.map((market) => (
-                            <SelectItem key={market.id} value={market.id}>
-                              {market.name}
-                            </SelectItem>
-                          ))
-                        ) : null}
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
-
-                {/* Market Type Filter - yalnız AZ + AGRO_AZ üçün */}
-                {showMarketsFilter && (
-                  <Select 
-                    value={selectedMarketType || "all"} 
-                    onValueChange={(v) => {
-                      setSelectedMarketType(v === "all" ? "" : v);
-                      setSelectedMarket("");
-                    }}
+                {/* GlobalMarket Filter - for non-AZ data sources */}
+                {selectedDataSource !== "AGRO_AZ" && (
+                  <Select
+                    value={selectedFpmaMarket || "national_avg"}
+                    onValueChange={(v) => setSelectedFpmaMarket(v === "national_avg" ? "" : v)}
                   >
-                    <SelectTrigger className="w-40">
-                      <Store className="w-4 h-4 mr-2 text-slate-400" />
-                      <SelectValue placeholder="Bazar növü" />
+                    <SelectTrigger className="w-48">
+                      <MapPin className="w-4 h-4 mr-2 text-slate-400" />
+                      <SelectValue placeholder="Bazar" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Bütün növlər</SelectItem>
-                      {filters?.marketTypes?.map((mt: any) => (
-                        <SelectItem 
-                          key={mt.id} 
-                          value={mt.id}
-                          disabled={!mt.hasData}
-                        >
-                          {mt.name} {!mt.hasData && "(yoxdur)"}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="national_avg">National Average</SelectItem>
+                      {availableFpmaMarkets.length > 0 ? (
+                        availableFpmaMarkets.map((market) => (
+                          <SelectItem key={market.id} value={market.id}>
+                            {market.name}
+                          </SelectItem>
+                        ))
+                      ) : null}
                     </SelectContent>
                   </Select>
                 )}
@@ -1006,7 +970,7 @@ export function ProductPageClient({
                         <SelectValue placeholder="İl" />
                       </SelectTrigger>
                       <SelectContent>
-                        {Array.from({ length: 10 }, (_, i) => 2020 + i).map((year) => (
+                        {Array.from({ length: 27 }, (_, i) => 2000 + i).map((year) => (
                           <SelectItem key={year} value={year.toString()}>
                             {year}
                           </SelectItem>
@@ -1049,7 +1013,7 @@ export function ProductPageClient({
                         <SelectValue placeholder="İl" />
                       </SelectTrigger>
                       <SelectContent>
-                        {Array.from({ length: 10 }, (_, i) => 2020 + i).map((year) => (
+                        {Array.from({ length: 27 }, (_, i) => 2000 + i).map((year) => (
                           <SelectItem key={year} value={year.toString()}>
                             {year}
                           </SelectItem>
