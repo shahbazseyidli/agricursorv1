@@ -21,7 +21,16 @@ export async function GET(request: NextRequest) {
       orderBy: { sortOrder: "asc" },
     });
 
-    return NextResponse.json({ categories });
+    // Map to frontend-friendly format
+    const mappedCategories = categories.map(cat => ({
+      ...cat,
+      _count: {
+        products: cat._count.globalProducts,
+        localCategories: cat._count.localCategories,
+      }
+    }));
+
+    return NextResponse.json({ success: true, data: mappedCategories });
   } catch (error) {
     console.error("Error fetching global categories:", error);
     return NextResponse.json(

@@ -14,11 +14,14 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { euProductId, azProductId, globalProductId, type } = body;
+    const { sourceId, euProductId, azProductId, globalProductId, type } = body;
 
-    if (type === "eu" && euProductId) {
+    // Use sourceId if provided, fallback to legacy format
+    const productId = sourceId || euProductId || azProductId;
+
+    if (type === "eu") {
       await prisma.euProduct.update({
-        where: { id: euProductId },
+        where: { id: productId },
         data: { globalProductId: globalProductId || null },
       });
 
@@ -28,9 +31,9 @@ export async function POST(req: Request) {
       });
     }
 
-    if (type === "az" && azProductId) {
+    if (type === "az") {
       await prisma.product.update({
-        where: { id: azProductId },
+        where: { id: productId },
         data: { globalProductId: globalProductId || null },
       });
 
@@ -40,8 +43,32 @@ export async function POST(req: Request) {
       });
     }
 
+    if (type === "fpma") {
+      await prisma.fpmaCommodity.update({
+        where: { id: productId },
+        data: { globalProductId: globalProductId || null },
+      });
+
+      return NextResponse.json({ 
+        success: true, 
+        message: globalProductId ? "FPMA commodity bağlandı" : "FPMA commodity ayrıldı" 
+      });
+    }
+
+    if (type === "fao") {
+      await prisma.faoProduct.update({
+        where: { id: productId },
+        data: { globalProductId: globalProductId || null },
+      });
+
+      return NextResponse.json({ 
+        success: true, 
+        message: globalProductId ? "FAO məhsul bağlandı" : "FAO məhsul ayrıldı" 
+      });
+    }
+
     return NextResponse.json(
-      { success: false, error: "Invalid request" },
+      { success: false, error: "Invalid request - type must be eu, az, fpma, or fao" },
       { status: 400 }
     );
   } catch (error: any) {

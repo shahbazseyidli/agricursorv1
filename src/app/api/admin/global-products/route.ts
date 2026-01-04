@@ -56,7 +56,8 @@ export async function GET(request: NextRequest) {
     ]);
 
     return NextResponse.json({
-      products,
+      success: true,
+      data: products,
       pagination: {
         total,
         page,
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ product });
+    return NextResponse.json({ success: true, data: product });
   } catch (error) {
     console.error("Error creating global product:", error);
     return NextResponse.json(
