@@ -129,7 +129,7 @@ model Unit {
 
 ### 2.3 Currency
 
-Currency exchange rates (from CBAR and FreeCurrencyAPI).
+Currency exchange rates (from CBAR and ExchangeRate-API).
 
 ```prisma
 model Currency {
@@ -140,7 +140,7 @@ model Currency {
   nameAz      String?  @map("name_az")
   rateToAZN   Decimal  @map("rate_to_azn") // Exchange rate to AZN
   rateToEUR   Decimal  @map("rate_to_eur") // Exchange rate to EUR
-  source      String?  // CBAR, FreeCurrencyAPI
+  source      String?  // CBAR, ExchangeRate-API
   isActive    Boolean  @default(true) @map("is_active")
   updatedAt   DateTime @updatedAt
 }
@@ -554,8 +554,8 @@ model EuPrice {
 | agro.gov.az | Price | Weekly | priceMin, priceAvg, priceMax |
 | Eurostat | EuPrice | Yearly | price (annual average) |
 | EC Agrifood | EuPrice | Weekly | price (weekly) |
-| CBAR | Currency | 4x/day | rateToAZN |
-| FreeCurrencyAPI | Currency | Daily | rateToEUR (fallback) |
+| CBAR | Currency | 4x/day | rateToAZN (official) |
+| ExchangeRate-API | Currency | Daily | 166 world currencies |
 
 ---
 

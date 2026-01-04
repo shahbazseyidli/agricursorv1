@@ -1,24 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// FreeCurrencyAPI - Free plan: 5000 requests/month
-// Docs: https://freecurrencyapi.com/docs/#official-libraries
-const FREECURRENCY_API_KEY = process.env.FREECURRENCY_API_KEY || "";
-const FREECURRENCY_API_URL = "https://api.freecurrencyapi.com/v1/latest";
-
-// CBAR (Central Bank of Azerbaijan) - Official rates
+// CBAR (Central Bank of Azerbaijan) - Official rates for AZN
 // URL format: https://cbar.az/currencies/DD.MM.YYYY.xml
 const CBAR_API_URL = "https://cbar.az/currencies";
 
-// All currencies supported by FreeCurrencyAPI
-const FREECURRENCY_SUPPORTED = [
-  "USD", "EUR", "JPY", "BGN", "CZK", "DKK", "GBP", "HUF", "PLN", "RON",
-  "SEK", "CHF", "ISK", "NOK", "HRK", "RUB", "TRY", "AUD", "BRL", "CAD",
-  "CNY", "HKD", "IDR", "ILS", "INR", "KRW", "MXN", "MYR", "NZD", "PHP",
-  "SGD", "THB", "ZAR"
-];
+// ExchangeRate-API - Free tier, 166 currencies, no API key required
+// Docs: https://www.exchangerate-api.com/docs/free
+const EXCHANGERATE_API_URL = "https://api.exchangerate-api.com/v4/latest/USD";
 
-// Currency metadata
+// Currency metadata (common currencies with proper symbols and names)
 const CURRENCY_INFO: Record<string, { symbol: string; nameAz: string; nameEn: string }> = {
   AZN: { symbol: "₼", nameAz: "Azərbaycan Manatı", nameEn: "Azerbaijani Manat" },
   USD: { symbol: "$", nameAz: "ABŞ Dolları", nameEn: "US Dollar" },
@@ -68,6 +59,44 @@ const CURRENCY_INFO: Record<string, { symbol: string; nameAz: string; nameEn: st
   KGS: { symbol: "с", nameAz: "Qırğız Somu", nameEn: "Kyrgyzstani Som" },
   PKR: { symbol: "₨", nameAz: "Pakistan Rupisi", nameEn: "Pakistani Rupee" },
   RSD: { symbol: "дин", nameAz: "Serbiya Dinarı", nameEn: "Serbian Dinar" },
+  // Additional currencies from ExchangeRate-API
+  AFN: { symbol: "؋", nameAz: "Əfqanıstan Əfqanisi", nameEn: "Afghan Afghani" },
+  ALL: { symbol: "L", nameAz: "Albaniya Leki", nameEn: "Albanian Lek" },
+  AMD: { symbol: "֏", nameAz: "Ermənistan Dramı", nameEn: "Armenian Dram" },
+  ARS: { symbol: "$", nameAz: "Argentina Pesosu", nameEn: "Argentine Peso" },
+  BDT: { symbol: "৳", nameAz: "Banqladeş Takası", nameEn: "Bangladeshi Taka" },
+  BHD: { symbol: ".د.ب", nameAz: "Bəhreyn Dinarı", nameEn: "Bahraini Dinar" },
+  BOB: { symbol: "Bs", nameAz: "Boliviya Bolivianosu", nameEn: "Bolivian Boliviano" },
+  CLP: { symbol: "$", nameAz: "Çili Pesosu", nameEn: "Chilean Peso" },
+  COP: { symbol: "$", nameAz: "Kolumbiya Pesosu", nameEn: "Colombian Peso" },
+  CRC: { symbol: "₡", nameAz: "Kosta Rika Kolonu", nameEn: "Costa Rican Colón" },
+  DZD: { symbol: "د.ج", nameAz: "Əlcəzair Dinarı", nameEn: "Algerian Dinar" },
+  EGP: { symbol: "E£", nameAz: "Misir Funtu", nameEn: "Egyptian Pound" },
+  ETB: { symbol: "Br", nameAz: "Efiopiya Birri", nameEn: "Ethiopian Birr" },
+  GHS: { symbol: "₵", nameAz: "Qana Sedisi", nameEn: "Ghanaian Cedi" },
+  IQD: { symbol: "ع.د", nameAz: "İraq Dinarı", nameEn: "Iraqi Dinar" },
+  IRR: { symbol: "﷼", nameAz: "İran Rialı", nameEn: "Iranian Rial" },
+  JOD: { symbol: "د.ا", nameAz: "İordaniya Dinarı", nameEn: "Jordanian Dinar" },
+  KES: { symbol: "KSh", nameAz: "Keniya Şillinqi", nameEn: "Kenyan Shilling" },
+  KHR: { symbol: "៛", nameAz: "Kamboca Rieli", nameEn: "Cambodian Riel" },
+  LBP: { symbol: "ل.ل", nameAz: "Livan Funtu", nameEn: "Lebanese Pound" },
+  LKR: { symbol: "Rs", nameAz: "Şri Lanka Rupisi", nameEn: "Sri Lankan Rupee" },
+  MAD: { symbol: "د.م.", nameAz: "Mərakeş Dirhəmi", nameEn: "Moroccan Dirham" },
+  MMK: { symbol: "K", nameAz: "Myanma Kyatı", nameEn: "Myanmar Kyat" },
+  MNT: { symbol: "₮", nameAz: "Monqoliya Tuqriki", nameEn: "Mongolian Tugrik" },
+  NGN: { symbol: "₦", nameAz: "Nigeriya Nairası", nameEn: "Nigerian Naira" },
+  NPR: { symbol: "रू", nameAz: "Nepal Rupisi", nameEn: "Nepalese Rupee" },
+  OMR: { symbol: "ر.ع.", nameAz: "Oman Rialı", nameEn: "Omani Rial" },
+  PEN: { symbol: "S/", nameAz: "Peru Solu", nameEn: "Peruvian Sol" },
+  TJS: { symbol: "SM", nameAz: "Tacikistan Somonisi", nameEn: "Tajikistani Somoni" },
+  TND: { symbol: "د.ت", nameAz: "Tunis Dinarı", nameEn: "Tunisian Dinar" },
+  TZS: { symbol: "TSh", nameAz: "Tanzaniya Şillinqi", nameEn: "Tanzanian Shilling" },
+  UGX: { symbol: "USh", nameAz: "Uqanda Şillinqi", nameEn: "Ugandan Shilling" },
+  VND: { symbol: "₫", nameAz: "Vyetnam Donqu", nameEn: "Vietnamese Dong" },
+  XAF: { symbol: "FCFA", nameAz: "CFA Frankı (BEAC)", nameEn: "CFA Franc BEAC" },
+  XOF: { symbol: "CFA", nameAz: "CFA Frankı (BCEAO)", nameEn: "CFA Franc BCEAO" },
+  YER: { symbol: "﷼", nameAz: "Yəmən Rialı", nameEn: "Yemeni Rial" },
+  ZMW: { symbol: "ZK", nameAz: "Zambiya Kvaçası", nameEn: "Zambian Kwacha" },
 };
 
 // Parse CBAR XML response
@@ -92,7 +121,7 @@ function parseCBARXml(xml: string): Record<string, { value: number; nominal: num
   return rates;
 }
 
-// Fetch rates from CBAR (Central Bank of Azerbaijan)
+// Fetch rates from CBAR (Central Bank of Azerbaijan) - PRIMARY SOURCE
 async function fetchCBARRates(): Promise<Record<string, number>> {
   const now = new Date();
   const dateStr = `${String(now.getDate()).padStart(2, "0")}.${String(now.getMonth() + 1).padStart(2, "0")}.${now.getFullYear()}`;
@@ -140,66 +169,57 @@ async function fetchCBARRates(): Promise<Record<string, number>> {
   }
 }
 
-// Fetch rates from FreeCurrencyAPI for currencies not in CBAR
-async function fetchFreeCurrencyRates(excludeCodes: string[]): Promise<Record<string, number>> {
-  if (!FREECURRENCY_API_KEY) {
-    console.warn("FreeCurrencyAPI key not configured");
-    return {};
-  }
-  
-  // Get currencies not in CBAR
-  const neededCurrencies = FREECURRENCY_SUPPORTED.filter(c => !excludeCodes.includes(c));
-  if (neededCurrencies.length === 0) return {};
-  
+// Fetch rates from ExchangeRate-API - SECONDARY SOURCE (for currencies not in CBAR)
+async function fetchExchangeRateApiRates(cbarCodes: string[]): Promise<Record<string, number>> {
   try {
-    const url = `${FREECURRENCY_API_URL}?currencies=${neededCurrencies.join(",")}`;
-    const response = await fetch(url, {
-      headers: { "apikey": FREECURRENCY_API_KEY },
-    });
-    
+    const response = await fetch(EXCHANGERATE_API_URL);
     if (!response.ok) {
-      throw new Error(`FreeCurrencyAPI error: ${response.status}`);
+      throw new Error(`ExchangeRate-API error: ${response.status}`);
     }
     
     const data = await response.json();
-    const usdRates = data.data;
+    const usdRates = data.rates;
     
-    // FreeCurrencyAPI returns rates relative to USD
-    // We need rates relative to AZN
-    // Fixed: 1 USD = 1.70 AZN (CBAR official rate)
-    const usdToAzn = 1.70;
+    // Get AZN rate from USD (1 USD = X AZN)
+    const usdToAzn = usdRates["AZN"] || 1.70; // fallback to approximate rate
     
+    // Calculate rates relative to AZN for currencies NOT in CBAR
     const rates: Record<string, number> = {};
     for (const [code, usdRate] of Object.entries(usdRates)) {
+      // Skip if already got from CBAR (CBAR has priority)
+      if (cbarCodes.includes(code)) continue;
+      // Skip AZN itself
+      if (code === "AZN") continue;
+      
       // usdRate = how many of currency per 1 USD
-      // aznRate = how many AZN per 1 USD = 1.70
-      // rateToAZN = usdRate / aznRate
+      // usdToAzn = how many AZN per 1 USD
+      // rateToAZN = usdRate / usdToAzn = how many of currency per 1 AZN
       rates[code] = (usdRate as number) / usdToAzn;
     }
     
     return rates;
   } catch (error) {
-    console.error("FreeCurrencyAPI fetch error:", error);
+    console.error("ExchangeRate-API fetch error:", error);
     return {};
   }
 }
 
-// POST - Update FX rates from both CBAR and FreeCurrencyAPI
+// POST - Update FX rates from CBAR (primary) + ExchangeRate-API (secondary)
 export async function POST() {
   try {
     const now = new Date();
     const updatedCurrencies: { code: string; rateToAZN: number; source: string }[] = [];
     
-    // 1. Fetch CBAR rates (primary source for AZN-based rates)
+    // 1. Fetch CBAR rates (primary source - official AZN rates)
     console.log("Fetching CBAR rates...");
     const cbarRates = await fetchCBARRates();
     const cbarCodes = Object.keys(cbarRates);
     console.log(`CBAR: Found ${cbarCodes.length} currencies`);
     
-    // 2. Fetch FreeCurrencyAPI rates for missing currencies
-    console.log("Fetching FreeCurrencyAPI rates...");
-    const freeCurrencyRates = await fetchFreeCurrencyRates(cbarCodes);
-    console.log(`FreeCurrencyAPI: Found ${Object.keys(freeCurrencyRates).length} additional currencies`);
+    // 2. Fetch ExchangeRate-API rates (secondary source - 166 currencies)
+    console.log("Fetching ExchangeRate-API rates...");
+    const exchangeRateApiRates = await fetchExchangeRateApiRates(cbarCodes);
+    console.log(`ExchangeRate-API: Found ${Object.keys(exchangeRateApiRates).length} additional currencies`);
     
     // 3. Update AZN (base currency)
     await prisma.currency.upsert({
@@ -218,7 +238,7 @@ export async function POST() {
     });
     updatedCurrencies.push({ code: "AZN", rateToAZN: 1, source: "base" });
     
-    // 4. Update CBAR currencies
+    // 4. Update CBAR currencies (PRIMARY - official rates)
     for (const [code, rateToAZN] of Object.entries(cbarRates)) {
       const info = CURRENCY_INFO[code] || { symbol: code, nameAz: code, nameEn: code };
       
@@ -244,8 +264,8 @@ export async function POST() {
       updatedCurrencies.push({ code, rateToAZN, source: "cbar" });
     }
     
-    // 5. Update FreeCurrencyAPI currencies (only those not in CBAR)
-    for (const [code, rateToAZN] of Object.entries(freeCurrencyRates)) {
+    // 5. Update ExchangeRate-API currencies (SECONDARY - for currencies not in CBAR)
+    for (const [code, rateToAZN] of Object.entries(exchangeRateApiRates)) {
       const info = CURRENCY_INFO[code] || { symbol: code, nameAz: code, nameEn: code };
       
       await prisma.currency.upsert({
@@ -264,10 +284,10 @@ export async function POST() {
       });
       
       await prisma.fxRateHistory.create({
-        data: { currencyCode: code, rateToAZN, source: "freecurrencyapi", fetchedAt: now },
+        data: { currencyCode: code, rateToAZN, source: "exchangerate-api", fetchedAt: now },
       });
       
-      updatedCurrencies.push({ code, rateToAZN, source: "freecurrencyapi" });
+      updatedCurrencies.push({ code, rateToAZN, source: "exchangerate-api" });
     }
     
     return NextResponse.json({
@@ -277,7 +297,7 @@ export async function POST() {
       summary: {
         total: updatedCurrencies.length,
         cbar: updatedCurrencies.filter(c => c.source === "cbar").length,
-        freecurrencyapi: updatedCurrencies.filter(c => c.source === "freecurrencyapi").length,
+        exchangeRateApi: updatedCurrencies.filter(c => c.source === "exchangerate-api").length,
       },
       currencies: updatedCurrencies,
     });
@@ -304,8 +324,8 @@ export async function GET() {
       orderBy: { fetchedAt: "desc" },
     });
     
-    const freeCurrencyHistory = await prisma.fxRateHistory.findFirst({
-      where: { source: "freecurrencyapi" },
+    const exchangeRateApiHistory = await prisma.fxRateHistory.findFirst({
+      where: { source: "exchangerate-api" },
       orderBy: { fetchedAt: "desc" },
     });
 
@@ -319,9 +339,13 @@ export async function GET() {
       sources: {
         cbar: {
           lastFetched: cbarHistory?.fetchedAt || null,
+          description: "Central Bank of Azerbaijan - Official rates",
+          priority: 1,
         },
-        freecurrencyapi: {
-          lastFetched: freeCurrencyHistory?.fetchedAt || null,
+        exchangeRateApi: {
+          lastFetched: exchangeRateApiHistory?.fetchedAt || null,
+          description: "ExchangeRate-API - 166 currencies, free tier",
+          priority: 2,
         },
       },
     });

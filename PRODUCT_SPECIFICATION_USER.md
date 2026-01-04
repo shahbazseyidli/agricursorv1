@@ -1039,8 +1039,8 @@ GET /api/products/apple/prices?country=be&range=all
 | agro.gov.az | https://agro.gov.az | AZ prices | Weekly |
 | Eurostat | https://ec.europa.eu/eurostat | EU annual prices | Yearly |
 | EC Agri-food | https://agridata.ec.europa.eu | EU weekly prices | Weekly |
-| CBAR | https://cbar.az | Exchange rates | 4x daily |
-| FreeCurrencyAPI | https://freecurrencyapi.com | Exchange rates | Daily |
+| CBAR | https://cbar.az | Official AZN exchange rates | 4x daily |
+| ExchangeRate-API | https://exchangerate-api.com | 166 world currencies | Daily |
 
 ---
 

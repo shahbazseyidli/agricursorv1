@@ -274,7 +274,7 @@ GlobalProduct cədvəli AZ və EU məhsullarını birləşdirir.
 
 ### 10.3 Valyuta Məzənnələri
 
-Valyuta məzənnələri CBAR və FreeCurrencyAPI-dan gətirilir.
+Valyuta məzənnələri CBAR (rəsmi AZN kursları) və ExchangeRate-API-dan (166 dünya valyutası) gətirilir.
 
 **Yeniləmə tezliyi:** Gündə 4 dəfə (10:00, 14:00, 19:00, 02:00 UTC+4)
 

@@ -13,7 +13,7 @@
   - **agro.gov.az** (Excel uploads) - AZ data
   - **Eurostat API** - EU annual prices
   - **EC Agri-food Portal API** - EU weekly prices
-- **Currency APIs:** CBAR (primary), FreeCurrencyAPI (fallback)
+- **Currency APIs:** CBAR (primary), ExchangeRate-API (secondary - 166 currencies)
 - **Price data:** min / average / max (confidence bands)
 - **Market-driven visualization and comparison**
 - **Cross-country comparison**
@@ -212,8 +212,8 @@ Examples:
 Stored in `Currency` table with exchange rates.
 
 Sources (in priority order):
-1. **CBAR** (Azerbaijan Central Bank) - Primary
-2. **FreeCurrencyAPI** - Fallback for missing currencies
+1. **CBAR** (Azerbaijan Central Bank) - Primary, official AZN rates
+2. **ExchangeRate-API** - Secondary, 166 world currencies (free tier, no API key)
 
 Update frequency: 4 times daily (UTC+4: 10am, 2pm, 7pm, 2am)
 
@@ -375,8 +375,8 @@ pricePerKg = pricePerHundredKg / 100
 
 | API | Purpose | Frequency |
 |-----|---------|-----------|
-| CBAR | Exchange rates | 4x daily |
-| FreeCurrencyAPI | Exchange rates (fallback) | Daily |
+| CBAR | Exchange rates (official AZN) | 4x daily |
+| ExchangeRate-API | Exchange rates (166 currencies) | Daily |
 | Eurostat SDMX | EU annual prices | Monthly |
 | EC Agri-food | EU weekly prices | Weekly |
 
@@ -530,7 +530,7 @@ See `DATABASE_ARCHITECTURE.md` for complete schema documentation.
 | 2026-01-01 | Added product page comparison | User |
 | 2026-01-02 | Added EU countries and products | User |
 | 2026-01-02 | Added Eurostat and EC Agrifood APIs | User |
-| 2026-01-02 | Added currency conversion (CBAR, FreeCurrencyAPI) | User |
+| 2026-01-02 | Added currency conversion (CBAR, ExchangeRate-API) | User |
 | 2026-01-02 | Added unit conversion | User |
 | 2026-01-02 | Added cross-country comparison | User |
 | 2026-01-02 | Added rich product content | User |

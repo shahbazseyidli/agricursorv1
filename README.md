@@ -11,7 +11,7 @@ A comprehensive agricultural commodity price monitoring and analytics platform s
 - **Universal Product Pages**: Single product page for all countries
 
 ### 💰 Currency & Unit Conversion
-- **5+ Currencies**: AZN, EUR, USD, RUB, TRY (via CBAR & FreeCurrencyAPI)
+- **160+ Currencies**: AZN, EUR, USD, RUB, TRY and more (via CBAR & ExchangeRate-API)
 - **Multiple Units**: kg, 100kg, lb, ton
 - **Real-time Conversion**: Prices automatically converted based on selection
 
@@ -45,7 +45,7 @@ A comprehensive agricultural commodity price monitoring and analytics platform s
 | Auth | NextAuth.js v4 |
 | Charts | Recharts |
 | Excel Parsing | xlsx (SheetJS) |
-| External APIs | CBAR, FreeCurrencyAPI, Eurostat, EC Agrifood |
+| External APIs | CBAR, ExchangeRate-API, Eurostat, EC Agrifood |
 
 ## 🛠 Installation
 
@@ -191,8 +191,8 @@ scripts/
 | agro.gov.az | Azerbaijan | Weekly | Market prices |
 | Eurostat | 27 EU countries | Yearly | Annual averages |
 | EC Agrifood | EU countries | Weekly | Supply chain prices |
-| CBAR | Currency | 4x daily | Exchange rates |
-| FreeCurrencyAPI | Currency | Daily | Exchange rates |
+| CBAR | Currency | 4x daily | Official AZN exchange rates |
+| ExchangeRate-API | Currency | Daily | 166 world currencies |
 
 ## 🛡 API Endpoints
 
