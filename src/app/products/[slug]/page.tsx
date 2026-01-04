@@ -269,7 +269,7 @@ async function getProductData(slug: string, countryCode?: string) {
     );
 
     // Get FPMA markets available for this product (filtered by country if selected)
-    const availableFpmaMarkets = [...new Set(fpmaSeriesWithPrices
+    let availableFpmaMarkets = [...new Set(fpmaSeriesWithPrices
       .filter(s => s.market && (!countryCode || s.country.iso3?.toLowerCase() === countryCode.toLowerCase() || s.country.iso2?.toLowerCase() === countryCode.toLowerCase()))
       .map(s => JSON.stringify({
         id: s.market.id,
@@ -278,6 +278,35 @@ async function getProductData(slug: string, countryCode?: string) {
         countryIso3: s.country.iso3,
       }))
     )].map(s => JSON.parse(s));
+    
+    // For AZ, also get GlobalMarkets including National Average options
+    if (selectedCountry === "AZ") {
+      const azGlobalMarkets = await prisma.globalMarket.findMany({
+        where: {
+          globalCountry: { iso2: "AZ" },
+          isActive: true,
+        },
+        orderBy: [
+          { sortOrder: "asc" },
+          { name: "asc" },
+        ],
+      });
+      
+      // Add AZ GlobalMarkets to available markets (prioritize National Average)
+      const azMarketsList = azGlobalMarkets.map(m => ({
+        id: m.id,
+        name: m.nameAz || m.name,
+        globalMarketId: m.id,
+        countryIso3: "AZE",
+        isNationalAvg: m.isNationalAvg,
+      }));
+      
+      // Put National Average options first
+      availableFpmaMarkets = [
+        ...azMarketsList.filter(m => m.isNationalAvg),
+        ...azMarketsList.filter(m => !m.isNationalAvg),
+      ];
+    }
 
     // Get FPMA countries with data
     const fpmaCountriesWithData = [...new Set(fpmaSeriesWithPrices

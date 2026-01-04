@@ -1,0 +1,17 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/update-currencies",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/fpma-sync",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/eu-sync",
+      "schedule": "0 4 * * *"
+    }
+  ]
+}
+

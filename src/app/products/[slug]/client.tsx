@@ -883,53 +883,27 @@ export function ProductPageClient({
                   </Select>
                 )}
 
-                {/* GlobalMarket Filter - for non-AZ data sources */}
-                {selectedDataSource !== "AGRO_AZ" && (
-                  <Select
-                    value={selectedFpmaMarket || "national_avg"}
-                    onValueChange={(v) => setSelectedFpmaMarket(v === "national_avg" ? "" : v)}
-                  >
-                    <SelectTrigger className="w-48">
-                      <MapPin className="w-4 h-4 mr-2 text-slate-400" />
-                      <SelectValue placeholder="Bazar" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="national_avg">National Average</SelectItem>
-                      {availableFpmaMarkets.length > 0 ? (
-                        availableFpmaMarkets.map((market) => (
-                          <SelectItem key={market.id} value={market.id}>
-                            {market.name}
-                          </SelectItem>
-                        ))
-                      ) : null}
-                    </SelectContent>
-                  </Select>
-                )}
-
-                {/* Market Filter - yalnız AZ üçün */}
-                {showMarketsFilter && (
-                  <Select 
-                    value={selectedMarket || "all"} 
-                    onValueChange={(v) => setSelectedMarket(v === "all" ? "" : v)}
-                  >
-                    <SelectTrigger className="w-44">
-                      <MapPin className="w-4 h-4 mr-2 text-slate-400" />
-                      <SelectValue placeholder="Bazar seç" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Bütün bazarlar</SelectItem>
-                      {availableMarkets.map((m: any) => (
-                        <SelectItem 
-                          key={m.id} 
-                          value={m.id}
-                          disabled={!m.hasData}
-                        >
-                          {m.name} {!m.hasData && "(yoxdur)"}
+                {/* GlobalMarket Filter - for all data sources */}
+                <Select
+                  value={selectedFpmaMarket || (availableFpmaMarkets.find((m: any) => m.isNationalAvg)?.id || "national_avg")}
+                  onValueChange={(v) => setSelectedFpmaMarket(v === "national_avg" ? "" : v)}
+                >
+                  <SelectTrigger className="w-48">
+                    <MapPin className="w-4 h-4 mr-2 text-slate-400" />
+                    <SelectValue placeholder="Bazar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableFpmaMarkets.length > 0 ? (
+                      availableFpmaMarkets.map((market: any) => (
+                        <SelectItem key={market.id} value={market.id}>
+                          {market.name}
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+                      ))
+                    ) : (
+                      <SelectItem value="national_avg">National Average</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
 
                 {/* Product Type Filter - HƏMİŞƏ görünsün, "Hamısı" olmasın */}
                 {filters?.productTypes && filters.productTypes.length > 0 && (
