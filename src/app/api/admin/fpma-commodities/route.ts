@@ -14,16 +14,31 @@ export async function GET(request: NextRequest) {
     const commodities = await prisma.fpmaCommodity.findMany({
       select: {
         id: true,
-        name: true,
+        nameEn: true,
+        nameAz: true,
         code: true,
+        baseCode: true,
+        varietyName: true,
         globalProductId: true,
       },
-      orderBy: { name: "asc" },
+      orderBy: { nameEn: "asc" },
     });
+
+    // Map to expected format
+    const mappedCommodities = commodities.map(c => ({
+      id: c.id,
+      name: c.nameAz || c.nameEn,
+      nameEn: c.nameEn,
+      nameAz: c.nameAz,
+      code: c.code,
+      baseCode: c.baseCode,
+      varietyName: c.varietyName,
+      globalProductId: c.globalProductId,
+    }));
 
     return NextResponse.json({
       success: true,
-      data: commodities,
+      data: mappedCommodities,
     });
   } catch (error) {
     console.error("Error fetching FPMA commodities:", error);

@@ -48,12 +48,13 @@ const adminNavItems = [
   { href: "/admin/upload", label: "Məlumat yüklə", icon: Upload },
   // Global bölmə
   { href: "/admin/global-products", label: "Global Məhsullar", icon: Layers },
+  { href: "/admin/global-countries", label: "Global Ölkələr", icon: Globe },
   // AZ Data
   { href: "/admin/products", label: "AZ Məhsullar", icon: Package },
   { href: "/admin/markets", label: "AZ Bazarlar", icon: MapPin },
   { href: "/admin/prices", label: "AZ Qiymətlər", icon: TrendingUp },
   // EU Data
-  { href: "/admin/eu-products", label: "EU Məhsulları", icon: Globe },
+  { href: "/admin/eu-products", label: "EU Məhsulları", icon: Link2 },
   { href: "/admin/eu-sync", label: "EU Sinxronizasiya", icon: RefreshCw },
   // System
   { href: "/admin/users", label: "İstifadəçilər", icon: Settings },

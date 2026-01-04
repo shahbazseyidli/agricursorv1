@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
-// GET: List all FAO Products
+// GET: List all FPMA Countries
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -11,40 +11,36 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const products = await prisma.faoProduct.findMany({
+    const countries = await prisma.fpmaCountry.findMany({
       select: {
         id: true,
+        iso2: true,
+        iso3: true,
         nameEn: true,
         nameAz: true,
-        itemCode: true,
-        cpcCode: true,
-        category: true,
-        globalProductId: true,
+        region: true,
+        globalCountryId: true,
       },
       orderBy: { nameEn: "asc" },
     });
 
-    // Map to expected format
-    const mappedProducts = products.map(p => ({
-      id: p.id,
-      itemNameEn: p.nameEn,
-      name: p.nameAz || p.nameEn,
-      nameEn: p.nameEn,
-      nameAz: p.nameAz,
-      itemCode: p.itemCode,
-      cpcCode: p.cpcCode,
-      category: p.category,
-      globalProductId: p.globalProductId,
+    const mappedCountries = countries.map(c => ({
+      id: c.id,
+      name: c.nameAz || c.nameEn,
+      nameEn: c.nameEn,
+      code: c.iso3 || c.iso2,
+      region: c.region,
+      globalCountryId: c.globalCountryId,
     }));
 
     return NextResponse.json({
       success: true,
-      data: mappedProducts,
+      data: mappedCountries,
     });
   } catch (error) {
-    console.error("Error fetching FAO products:", error);
+    console.error("Error fetching FPMA countries:", error);
     return NextResponse.json(
-      { error: "Failed to fetch FAO products" },
+      { error: "Failed to fetch FPMA countries" },
       { status: 500 }
     );
   }
