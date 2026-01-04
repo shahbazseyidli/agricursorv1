@@ -6,6 +6,7 @@ import {
   Search, 
   ArrowRight, 
   TrendingUp, 
+  TrendingDown,
   BarChart3, 
   Globe,
   Leaf,
@@ -16,12 +17,15 @@ import {
   Loader2,
   X,
   Brain,
-  MessageSquare,
-  BarChart2,
   MessageCircle,
+  BarChart2,
+  FileText,
+  AlertTriangle,
+  Zap,
+  Database,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 // Flag emoji helper
@@ -40,10 +44,50 @@ const categoryIcons: Record<string, string> = {
   "Vegetables": "🥬",
   "Grains": "🌾",
   "Nuts": "🥜",
+  "Cereals": "🌾",
   "Other": "📦",
   "Meyvələr": "🍎",
   "Tərəvəzlər": "🥬",
 };
+
+// Mock data for Live Market Intelligence
+const mockLiveMarketData = [
+  { product: "Apple", productAz: "Alma", country: "AZ", market: "Retail", price: 1.45, currency: "USD", wow: 2.3, mom: 5.1, signal: "stable" },
+  { product: "Tomato", productAz: "Pomidor", country: "TR", market: "Wholesale", price: 0.85, currency: "USD", wow: -1.2, mom: -8.4, signal: "watch" },
+  { product: "Potato", productAz: "Kartof", country: "DE", market: "Producer", price: 0.32, currency: "USD", wow: 0.5, mom: 2.1, signal: "stable" },
+  { product: "Wheat", productAz: "Buğda", country: "UA", market: "Wholesale", price: 245, currency: "USD", wow: -3.1, mom: -12.5, signal: "alert" },
+  { product: "Onion", productAz: "Soğan", country: "IN", market: "Retail", price: 0.55, currency: "USD", wow: 8.2, mom: 15.3, signal: "alert" },
+  { product: "Rice", productAz: "Düyü", country: "PK", market: "Wholesale", price: 0.78, currency: "USD", wow: 1.5, mom: 4.2, signal: "stable" },
+];
+
+// Mock weekly briefs
+const mockWeeklyBriefs = [
+  { title: "Global Grain Weekly", subtitle: "Jan 4 - Jan 11, 2026", icon: "🌾", type: "grain" },
+  { title: "Caucasus Agri Watch", subtitle: "Weekly Regional Report", icon: "🏔️", type: "regional" },
+  { title: "Top 5 Price Anomalies", subtitle: "This Week's Alerts", icon: "⚠️", type: "alert" },
+];
+
+// Mock trending data
+const mockTrendingProducts = [
+  { name: "Wheat", change: 12, direction: "up" },
+  { name: "Rice", change: 8, direction: "up" },
+  { name: "Corn", change: 5, direction: "up" },
+  { name: "Soybean", change: 3, direction: "up" },
+];
+
+const mockMostSearched = [
+  { query: "Apple + Germany" },
+  { query: "Wheat + Ukraine" },
+  { query: "Potato + Poland" },
+  { query: "Tomato + Turkey" },
+];
+
+const mockVolatility = [
+  { name: "Onion", level: "high" },
+  { name: "Tomato", level: "medium" },
+  { name: "Pepper", level: "medium" },
+  { name: "Garlic", level: "low" },
+];
 
 interface MarketBriefClientProps {
   stats: {
@@ -142,7 +186,6 @@ export function MarketBriefClient({
 
     try {
       if (responseMode === "chart") {
-        // Chart mode - get structured data
         const response = await fetch("/api/ai/chart", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -157,7 +200,6 @@ export function MarketBriefClient({
 
         setChartData(data);
       } else {
-        // Text mode - streaming response
         const response = await fetch("/api/ai/stream", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -219,22 +261,33 @@ export function MarketBriefClient({
     setChartData(null);
   };
 
-  // Get max price for chart scaling
   const maxPrice = chartData?.chartData.length 
     ? Math.max(...chartData.chartData.map(d => d.priceInAZN))
     : 0;
 
+  // Signal badge component
+  const SignalBadge = ({ signal }: { signal: string }) => {
+    const colors = {
+      stable: "bg-emerald-500",
+      watch: "bg-amber-500",
+      alert: "bg-red-500",
+    };
+    return (
+      <div className={`w-3 h-3 rounded-full ${colors[signal as keyof typeof colors] || colors.stable}`} />
+    );
+  };
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-slate-200">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link href="/" className="flex items-center gap-2">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
                 <Leaf className="w-5 h-5 text-white" />
               </div>
-              <span className="font-bold text-xl text-slate-900">AgriPrice</span>
+              <span className="font-bold text-xl text-slate-900">Agrai</span>
             </Link>
 
             <nav className="hidden md:flex items-center gap-8">
@@ -242,46 +295,37 @@ export function MarketBriefClient({
                 href="/products"
                 className="text-sm font-medium text-slate-600 hover:text-emerald-600 transition-colors"
               >
-                Məhsullar
-              </Link>
-              <Link
-                href="/markets"
-                className="text-sm font-medium text-slate-600 hover:text-emerald-600 transition-colors"
-              >
-                Bazarlar
+                Products
               </Link>
               <Link
                 href="/countries"
                 className="text-sm font-medium text-slate-600 hover:text-emerald-600 transition-colors"
               >
-                Ölkələr
+                Countries
               </Link>
               <Link
-                href="/dashboard"
+                href="/data-sources"
                 className="text-sm font-medium text-slate-600 hover:text-emerald-600 transition-colors"
               >
-                Dashboard
+                Data Sources
               </Link>
             </nav>
 
             <div className="flex items-center gap-3">
-              <Button variant="ghost" asChild>
-                <Link href="/login">Daxil ol</Link>
-              </Button>
-              <Button className="bg-emerald-600 hover:bg-emerald-700" asChild>
-                <Link href="/register">Qeydiyyat</Link>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/login">Login</Link>
               </Button>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Hero Section with Search */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* AI HERO SECTION - SAXLANILIR */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
       <section className="pt-24 pb-16 min-h-[70vh] relative overflow-hidden">
-        {/* Clean dark gradient - Apple style */}
         <div className="absolute inset-0 bg-gradient-to-b from-[#0a0f0d] via-[#0d1210] to-[#0a0a0a]" />
         
-        {/* Subtle glow orbs - much softer */}
         <div className="absolute inset-0">
           <div className="absolute top-1/3 left-1/4 w-[500px] h-[500px] bg-emerald-600/8 rounded-full blur-[120px]" />
           <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-teal-600/6 rounded-full blur-[100px]" />
@@ -322,12 +366,10 @@ export function MarketBriefClient({
             {/* Premium AI Search Box */}
             <div className="max-w-3xl mx-auto">
               <div className="relative group">
-                {/* Glow effect */}
                 <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500/50 via-teal-500/50 to-cyan-500/50 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-500" />
                 
                 <div className="relative bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden shadow-2xl shadow-emerald-500/5">
                   <div className="flex items-center">
-                    {/* AI Icon with pulse */}
                     <div className="pl-5 pr-3 py-4">
                       <div className="relative">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${
@@ -336,9 +378,7 @@ export function MarketBriefClient({
                             : "bg-gradient-to-br from-emerald-500/20 to-teal-500/20 group-hover:from-emerald-500/30 group-hover:to-teal-500/30"
                         }`}>
                           {isSearching ? (
-                            <div className="relative">
-                              <Loader2 className="w-5 h-5 text-white animate-spin" />
-                            </div>
+                            <Loader2 className="w-5 h-5 text-white animate-spin" />
                           ) : (
                             <Brain className="w-5 h-5 text-emerald-400 group-hover:text-emerald-300 transition-colors" />
                           )}
@@ -349,7 +389,6 @@ export function MarketBriefClient({
                       </div>
                     </div>
                     
-                    {/* Input */}
                     <input
                       type="text"
                       className="flex-1 bg-transparent py-5 text-white text-lg placeholder-slate-500 focus:outline-none"
@@ -360,7 +399,6 @@ export function MarketBriefClient({
                       disabled={isSearching}
                     />
                     
-                    {/* Actions */}
                     <div className="pr-3 flex items-center gap-2">
                       {searchQuery && !isSearching && (
                         <button 
@@ -371,7 +409,6 @@ export function MarketBriefClient({
                         </button>
                       )}
                       
-                      {/* Mode toggle - compact */}
                       <div className="flex items-center gap-0.5 p-1 bg-white/5 rounded-lg">
                         <button
                           onClick={() => setResponseMode("text")}
@@ -397,7 +434,6 @@ export function MarketBriefClient({
                         </button>
                       </div>
                       
-                      {/* Search button */}
                       <button 
                         className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all ${
                           isSearching || !searchQuery.trim()
@@ -415,7 +451,7 @@ export function MarketBriefClient({
                         ) : (
                           <>
                             <Sparkles className="w-4 h-4" />
-                            <span>Axtar</span>
+                            <span>Search</span>
                           </>
                         )}
                       </button>
@@ -426,46 +462,25 @@ export function MarketBriefClient({
               
               {/* Quick suggestions */}
               <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
-                <span className="text-xs text-slate-400">Cəhd edin:</span>
-                {["Alma qiymətləri", "Pomidor trendi", "Kartof Avropa ilə müqayisə"].map((suggestion) => (
+                <span className="text-xs text-slate-400">Popular:</span>
+                {["Alma", "Buğda", "Pomidor", "Kartof", "Düyü"].map((suggestion) => (
                   <button
                     key={suggestion}
-                    onClick={() => {
-                      setSearchQuery(suggestion);
-                    }}
+                    onClick={() => setSearchQuery(suggestion + " qiymətləri")}
                     className="px-3 py-1.5 text-xs text-slate-300 hover:text-emerald-300 bg-white/5 hover:bg-emerald-500/15 rounded-full border border-white/10 hover:border-emerald-500/30 transition-all"
                   >
                     {suggestion}
                   </button>
                 ))}
               </div>
-              
-              {/* Powered by badge */}
-              <div className="flex items-center justify-center gap-3 mt-6 text-xs text-slate-400">
-                <span>Gücləndirən:</span>
-                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/5 rounded-md border border-white/5">
-                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span className="text-slate-300">3 API</span>
-                </div>
-                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/5 rounded-md border border-white/5">
-                  <Globe className="w-3 h-3 text-slate-400" />
-                  <span className="text-slate-300">50+ ölkə</span>
-                </div>
-                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/5 rounded-md border border-white/5">
-                  <TrendingUp className="w-3 h-3 text-slate-400" />
-                  <span className="text-slate-300">Real-time</span>
-                </div>
-              </div>
 
-              {/* AI Search Result - Premium Design */}
+              {/* AI Search Result */}
               {(streamingAnswer || searchError || isSearching || chartData) && (
                 <div className="mt-8 text-left">
                   <div className="relative">
-                    {/* Glow effect for result card */}
                     <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 rounded-2xl blur opacity-75" />
                     
                     <div className="relative bg-slate-900/90 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden">
-                      {/* Header */}
                       <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-gradient-to-r from-emerald-500/5 to-transparent">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
@@ -474,529 +489,351 @@ export function MarketBriefClient({
                           <div>
                             <span className="font-semibold text-white">Agrai</span>
                             <span className="text-slate-500 text-sm ml-2">
-                              {isSearching ? "analiz edir..." : responseMode === "chart" ? "qrafik nəticə" : "cavab"}
+                              {isSearching ? "analyzing..." : "response"}
                             </span>
                           </div>
                         </div>
-                        {!isSearching && (streamingAnswer || chartData) && (
-                          <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 rounded-full">
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-xs text-emerald-400">Hazır</span>
-                          </div>
-                        )}
                       </div>
                       
                       <div className="p-6">
-                        {/* Loading State */}
                         {isSearching && !streamingAnswer && !chartData && (
                           <div className="flex items-center gap-4 py-4">
-                            <div className="relative">
-                              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center">
-                                <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
-                              </div>
-                              <div className="absolute inset-0 rounded-xl bg-emerald-500/20 animate-ping" style={{ animationDuration: "1.5s" }} />
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="text-white font-medium">Agrai düşünür</span>
-                                <span className="text-slate-500 text-sm">•</span>
-                                <span className="text-slate-500 text-sm">Məlumatlar analiz edilir</span>
-                              </div>
-                              <div className="flex gap-1">
-                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-bounce" style={{ animationDelay: "0ms" }} />
-                                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: "150ms" }} />
-                                <div className="w-2 h-2 rounded-full bg-teal-400 animate-bounce" style={{ animationDelay: "300ms" }} />
-                              </div>
-                            </div>
+                            <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+                            <span className="text-white">Agrai analyzing data...</span>
                           </div>
                         )}
                       
-                      {/* Error State */}
-                      {searchError && (
-                        <div className="flex items-start gap-4 p-4 bg-red-500/10 rounded-xl border border-red-500/20">
-                          <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                        {searchError && (
+                          <div className="flex items-start gap-4 p-4 bg-red-500/10 rounded-xl border border-red-500/20">
                             <X className="w-5 h-5 text-red-400" />
+                            <p className="text-red-400">{searchError}</p>
                           </div>
-                          <div>
-                            <p className="font-medium text-red-400">Xəta baş verdi</p>
-                            <p className="text-sm text-red-300/70 mt-1">{searchError}</p>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Text Response - Premium */}
-                      {streamingAnswer && (
-                        <div className="space-y-4">
+                        )}
+                        
+                        {streamingAnswer && (
                           <div 
                             className="text-slate-200 text-[15px] leading-relaxed whitespace-pre-wrap"
                             dangerouslySetInnerHTML={{ 
                               __html: streamingAnswer
                                 .replace(/\*\*([^*]+)\*\*/g, '<span class="font-semibold text-emerald-400">$1</span>')
-                                .replace(/\*([^*]+)\*/g, '<em class="text-slate-400">$1</em>')
                                 .replace(/\n/g, '<br />')
                             }}
                           />
-                          {isSearching && (
-                            <span className="inline-block w-2 h-5 bg-gradient-to-t from-emerald-500 to-teal-400 rounded-sm animate-pulse ml-1" />
-                          )}
-                          
-                          {/* Source attribution */}
-                          {!isSearching && (
-                            <div className="flex items-center gap-4 pt-4 mt-4 border-t border-white/5">
-                              <span className="text-xs text-slate-500">Mənbələr:</span>
-                              <div className="flex items-center gap-2">
-                                <a href="https://agro.gov.az" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 rounded text-xs text-emerald-400 transition-colors">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                  Agro.gov.az
-                                </a>
-                                <a href="https://ec.europa.eu/eurostat" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 rounded text-xs text-blue-400 transition-colors">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                  EUROSTAT
-                                </a>
-                                <a href="https://www.fao.org/faostat" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 rounded text-xs text-amber-400 transition-colors">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                                  FAOSTAT
-                                </a>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                        )}
 
-                      {/* Chart Response */}
-                      {chartData && chartData.chartData.length > 0 && (
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-2 mb-4">
-                            <BarChart2 className="w-5 h-5 text-emerald-400" />
+                        {chartData && chartData.chartData.length > 0 && (
+                          <div className="space-y-4">
                             <h3 className="text-lg font-semibold text-white">
-                              {chartData.product?.name} - Qiymət Müqayisəsi
+                              {chartData.product?.name} - Price Comparison
                             </h3>
-                            <Badge variant="outline" className="text-xs text-slate-400 border-slate-600">
-                              AZN/kq
-                            </Badge>
-                          </div>
-                          
-                          <div className="space-y-2">
-                            {chartData.chartData.map((item, index) => (
-                              <div key={index} className="flex items-center gap-3">
-                                <div className="w-32 text-xs text-slate-300 truncate" title={`${item.country} - ${item.priceType}`}>
-                                  <span className="font-medium">{item.country}</span>
-                                  <span className="text-slate-500 ml-1">({item.year})</span>
-                                </div>
-                                <div className="flex-1 relative h-8 bg-slate-800 rounded overflow-hidden">
-                                  <div
-                                    className={`absolute inset-y-0 left-0 rounded transition-all duration-500 ${
-                                      item.source === "Agro.gov.az"
-                                        ? "bg-gradient-to-r from-emerald-600 to-emerald-500"
-                                        : item.source === "EUROSTAT"
-                                        ? "bg-gradient-to-r from-blue-600 to-blue-500"
-                                        : "bg-gradient-to-r from-amber-600 to-amber-500"
-                                    }`}
-                                    style={{ width: `${(item.priceInAZN / maxPrice) * 100}%` }}
-                                  />
-                                  <div className="absolute inset-0 flex items-center px-2">
-                                    <span className="text-xs font-bold text-white drop-shadow">
-                                      {item.priceInAZN.toFixed(2)} AZN/kg
-                                    </span>
+                            <div className="space-y-2">
+                              {chartData.chartData.map((item, index) => (
+                                <div key={index} className="flex items-center gap-3">
+                                  <div className="w-32 text-xs text-slate-300 truncate">
+                                    {item.country} ({item.year})
+                                  </div>
+                                  <div className="flex-1 relative h-8 bg-slate-800 rounded overflow-hidden">
+                                    <div
+                                      className="absolute inset-y-0 left-0 rounded bg-gradient-to-r from-emerald-600 to-emerald-500"
+                                      style={{ width: `${(item.priceInAZN / maxPrice) * 100}%` }}
+                                    />
+                                    <div className="absolute inset-0 flex items-center px-2">
+                                      <span className="text-xs font-bold text-white drop-shadow">
+                                        {item.priceInAZN.toFixed(2)} AZN/kg
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
-                                <a 
-                                  href={item.sourceUrl} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="w-24 text-xs text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1"
-                                  title={item.priceType}
-                                >
-                                  {item.source}
-                                  <ExternalLink className="w-3 h-3" />
-                                </a>
-                              </div>
-                            ))}
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-slate-700">
-                            <div className="flex items-center gap-1">
-                              <div className="w-3 h-3 rounded bg-emerald-500" />
-                              <span className="text-xs text-slate-400">Agro.gov.az - Sahə qiyməti</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <div className="w-3 h-3 rounded bg-blue-500" />
-                              <span className="text-xs text-slate-400">EUROSTAT - İstehsalçı qiyməti</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <div className="w-3 h-3 rounded bg-amber-500" />
-                              <span className="text-xs text-slate-400">FAOSTAT - İstehsalçı qiyməti</span>
+                              ))}
                             </div>
                           </div>
-
-                          <p className="text-xs text-slate-500 mt-2">
-                            * Bütün qiymətlər AZN/kg-a çevrilmişdir (1 EUR ≈ 1.85 AZN, 1 USD ≈ 1.70 AZN)
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            * EUROSTAT və FAOSTAT &quot;İstehsalçı qiyməti&quot; (Producer Price), Agro.gov.az &quot;Sahə qiyməti&quot; (Farmgate) göstərir
-                          </p>
-                        </div>
-                      )}
+                        )}
                       </div>
                     </div>
                   </div>
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      </section>
 
-            {/* Trending products as floating pills */}
-            <div className="flex flex-wrap items-center justify-center gap-2 mt-10">
-              <span className="text-xs text-slate-400 uppercase tracking-wider mr-2">Trend:</span>
-              {trendingProducts.slice(0, 6).map((product, i) => (
-                <Link
-                  key={product.id}
-                  href={`/products/${product.slug}`}
-                  className="group px-4 py-2 bg-white/5 hover:bg-emerald-500/15 border border-white/10 hover:border-emerald-400/40 rounded-full text-sm text-slate-200 hover:text-white transition-all duration-300"
-                  style={{ animationDelay: `${i * 100}ms` }}
-                >
-                  <span className="mr-1.5 opacity-70 group-hover:opacity-100 transition-opacity">
-                    {i === 0 ? "🔥" : i === 1 ? "📈" : "🌿"}
-                  </span>
-                  {product.nameAz || product.nameEn}
-                </Link>
-              ))}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* LIVE MARKET INTELLIGENCE - YENİ TABLE-FIRST DİZAYN */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      <section className="py-12 bg-white border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                <Zap className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Live Market Intelligence</h2>
+                <p className="text-sm text-slate-500">Real-time price monitoring across 50+ countries</p>
+              </div>
+            </div>
+            <Link href="/products" className="text-sm text-emerald-600 hover:text-emerald-700 flex items-center gap-1">
+              View All <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+
+          {/* Main Table */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider px-6 py-4">Product</th>
+                    <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider px-4 py-4">Country</th>
+                    <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider px-4 py-4">Market</th>
+                    <th className="text-right text-xs font-semibold text-slate-600 uppercase tracking-wider px-4 py-4">Price</th>
+                    <th className="text-right text-xs font-semibold text-slate-600 uppercase tracking-wider px-4 py-4">WoW</th>
+                    <th className="text-right text-xs font-semibold text-slate-600 uppercase tracking-wider px-4 py-4">MoM</th>
+                    <th className="text-center text-xs font-semibold text-slate-600 uppercase tracking-wider px-4 py-4">AI Signal</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {mockLiveMarketData.map((row, index) => (
+                    <tr key={index} className="hover:bg-slate-50 transition-colors cursor-pointer">
+                      <td className="px-6 py-4">
+                        <Link href={`/products/${row.product.toLowerCase()}`} className="flex items-center gap-3">
+                          <span className="text-lg">{categoryIcons[row.product === "Wheat" ? "Grains" : "Fruits"]}</span>
+                          <div>
+                            <div className="font-medium text-slate-900">{row.product}</div>
+                            <div className="text-xs text-slate-500">{row.productAz}</div>
+                          </div>
+                        </Link>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{getFlagEmoji(row.country)}</span>
+                          <span className="text-sm text-slate-700">{row.country}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <Badge variant="outline" className="text-xs">{row.market}</Badge>
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <span className="font-mono font-semibold text-slate-900">
+                          ${row.price.toFixed(2)}
+                          <span className="text-xs text-slate-500 font-normal">/kg</span>
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <span className={`inline-flex items-center gap-1 font-mono text-sm ${row.wow >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {row.wow >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                          {row.wow >= 0 ? '+' : ''}{row.wow.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <span className={`inline-flex items-center gap-1 font-mono text-sm ${row.mom >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {row.mom >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                          {row.mom >= 0 ? '+' : ''}{row.mom.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex justify-center">
+                          <SignalBadge signal={row.signal} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            
+            {/* Legend */}
+            <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center gap-6 text-xs text-slate-500">
+              <span className="font-medium">AI Signal:</span>
+              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Stable</div>
+              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-500" /> Watch</div>
+              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500" /> Alert</div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Stats Bar */}
-      <section className="bg-white border-b border-slate-200 py-6">
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* WEEKLY AI BRIEFS + TRENDING TABLES */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      <section className="py-12 bg-slate-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-3 gap-6">
+            
+            {/* Weekly AI Briefs */}
+            <Card className="lg:col-span-1">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-emerald-600" />
+                  <CardTitle className="text-lg">Weekly AI Briefs</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {mockWeeklyBriefs.map((brief, index) => (
+                  <div key={index} className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer">
+                    <span className="text-2xl">{brief.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-slate-900 text-sm">{brief.title}</div>
+                      <div className="text-xs text-slate-500">{brief.subtitle}</div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-slate-400" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            {/* Trending Products */}
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-emerald-600" />
+                  <CardTitle className="text-lg">Trending Products</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {mockTrendingProducts.map((product, index) => (
+                    <div key={index} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-slate-500 w-4">{index + 1}.</span>
+                        <span className="text-sm font-medium text-slate-900">{product.name}</span>
+                      </div>
+                      <span className="text-sm font-mono text-emerald-600">▲ {product.change}%</span>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="mt-6 pt-4 border-t border-slate-200">
+                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Most Searched</div>
+                  <div className="space-y-2">
+                    {mockMostSearched.map((item, index) => (
+                      <div key={index} className="text-sm text-slate-600">{index + 1}. {item.query}</div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Volatility Index */}
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-600" />
+                  <CardTitle className="text-lg">Volatility Index</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {mockVolatility.map((item, index) => (
+                    <div key={index} className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-slate-900">{item.name}</span>
+                      <Badge 
+                        variant="outline" 
+                        className={`text-xs ${
+                          item.level === 'high' ? 'bg-red-50 text-red-700 border-red-200' :
+                          item.level === 'medium' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                          'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        }`}
+                      >
+                        {item.level === 'high' ? '🔴' : item.level === 'medium' ? '🟡' : '🟢'} {item.level}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* STATS BAR */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      <section className="py-8 bg-white border-y border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
             <div className="text-center">
-              <div className="text-2xl font-bold text-emerald-600">{stats.products}+</div>
-              <div className="text-sm text-slate-500">Məhsul</div>
+              <div className="text-3xl font-bold text-emerald-600">{stats.products}+</div>
+              <div className="text-sm text-slate-500">Products</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-emerald-600">{stats.markets}+</div>
-              <div className="text-sm text-slate-500">Bazar</div>
+              <div className="text-3xl font-bold text-emerald-600">136</div>
+              <div className="text-sm text-slate-500">Countries</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-emerald-600">{stats.euCountries}</div>
-              <div className="text-sm text-slate-500">EU Ölkə</div>
+              <div className="text-3xl font-bold text-emerald-600">{stats.markets}+</div>
+              <div className="text-sm text-slate-500">Markets</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-emerald-600">{stats.faoCountries}</div>
-              <div className="text-sm text-slate-500">FAO Ölkə</div>
+              <div className="text-3xl font-bold text-emerald-600">4</div>
+              <div className="text-sm text-slate-500">Data Sources</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-emerald-600">{(stats.prices / 1000).toFixed(0)}K+</div>
-              <div className="text-sm text-slate-500">Qiymət qeydi</div>
+              <div className="text-3xl font-bold text-emerald-600">{(stats.prices / 1000).toFixed(0)}K+</div>
+              <div className="text-sm text-slate-500">Price Records</div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Categories Section */}
-      <section className="py-12 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-slate-900">Kateqoriyalar</h2>
-            <Link href="/categories" className="text-sm text-emerald-600 hover:text-emerald-700 flex items-center gap-1">
-              Hamısına bax <ChevronRight className="w-4 h-4" />
-            </Link>
-          </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {categories.slice(0, 6).map((category) => (
-              <Link
-                key={category.name}
-                href={`/categories/${category.name.toLowerCase()}`}
-                className="group"
-              >
-                <Card className="hover:shadow-lg hover:border-emerald-200 transition-all duration-300">
-                  <CardContent className="p-4 text-center">
-                    <div className="text-3xl mb-2">
-                      {categoryIcons[category.name] || "📦"}
-                    </div>
-                    <div className="font-medium text-slate-900 group-hover:text-emerald-600 transition-colors">
-                      {category.name}
-                    </div>
-                    <div className="text-xs text-slate-500">{category.count} məhsul</div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Azerbaijan Market Prices */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* QUICK ACCESS CARDS */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
       <section className="py-12 bg-slate-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">🇦🇿</span>
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">Azərbaycan Bazar Qiymətləri</h2>
-                <p className="text-sm text-slate-500">agro.gov.az mənbəsindən</p>
-              </div>
-            </div>
-            <Link href="/markets" className="text-sm text-emerald-600 hover:text-emerald-700 flex items-center gap-1">
-              Hamısına bax <ChevronRight className="w-4 h-4" />
+          <div className="grid md:grid-cols-3 gap-6">
+            <Link href="/products">
+              <Card className="h-full hover:shadow-lg hover:border-emerald-200 transition-all duration-300 cursor-pointer group">
+                <CardContent className="p-6">
+                  <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center mb-4 group-hover:bg-emerald-200 transition-colors">
+                    <Database className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900 mb-2">Browse Products</h3>
+                  <p className="text-sm text-slate-600">Explore {stats.products}+ agricultural commodities with global price data</p>
+                  <div className="mt-4 text-emerald-600 text-sm font-medium flex items-center gap-1">
+                    View Products <ArrowRight className="w-4 h-4" />
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+
+            <Link href="/countries">
+              <Card className="h-full hover:shadow-lg hover:border-emerald-200 transition-all duration-300 cursor-pointer group">
+                <CardContent className="p-6">
+                  <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center mb-4 group-hover:bg-blue-200 transition-colors">
+                    <Globe className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900 mb-2">Browse Countries</h3>
+                  <p className="text-sm text-slate-600">136 countries with agricultural market intelligence</p>
+                  <div className="mt-4 text-blue-600 text-sm font-medium flex items-center gap-1">
+                    View Countries <ArrowRight className="w-4 h-4" />
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+
+            <Link href="/data-sources">
+              <Card className="h-full hover:shadow-lg hover:border-emerald-200 transition-all duration-300 cursor-pointer group">
+                <CardContent className="p-6">
+                  <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center mb-4 group-hover:bg-amber-200 transition-colors">
+                    <BarChart3 className="w-6 h-6 text-amber-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900 mb-2">Data Sources</h3>
+                  <p className="text-sm text-slate-600">FAO FPMA, Eurostat, FAOSTAT, and local market data</p>
+                  <div className="mt-4 text-amber-600 text-sm font-medium flex items-center gap-1">
+                    View Sources <ArrowRight className="w-4 h-4" />
+                  </div>
+                </CardContent>
+              </Card>
             </Link>
           </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {latestAzPrices.map((price) => (
-              <Link key={price.id} href={`/products/${price.productSlug}`}>
-                <Card className="hover:shadow-lg hover:border-emerald-200 transition-all duration-300 h-full">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <div className="font-semibold text-slate-900">{price.productName}</div>
-                        <div className="text-sm text-slate-500">{price.marketName}</div>
-                      </div>
-                      <Badge variant="outline" className="text-xs">
-                        {price.marketType}
-                      </Badge>
-                    </div>
-                    <div className="flex items-end justify-between">
-                      <div className="text-2xl font-bold text-emerald-600">
-                        {price.price.toFixed(2)} ₼
-                      </div>
-                      <div className="text-xs text-slate-400 flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {price.date.split('T')[0].split('-').reverse().join('.')}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
         </div>
       </section>
 
-      {/* EU Market Prices */}
-      <section className="py-12 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">🇪🇺</span>
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">Avropa Bazar Qiymətləri</h2>
-                <p className="text-sm text-slate-500">Eurostat mənbəsindən</p>
-              </div>
-            </div>
-            <Link href="/countries" className="text-sm text-emerald-600 hover:text-emerald-700 flex items-center gap-1">
-              Hamısına bax <ChevronRight className="w-4 h-4" />
-            </Link>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {latestEuPrices.map((price) => (
-              <Link key={price.id} href={price.productSlug ? `/products/${price.productSlug}` : '/products'}>
-                <Card className="hover:shadow-lg hover:border-blue-200 transition-all duration-300 h-full">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <div className="font-semibold text-slate-900">{price.productName}</div>
-                        <div className="text-sm text-slate-500 flex items-center gap-1">
-                          {getFlagEmoji(price.countryCode)} {price.countryName}
-                        </div>
-                      </div>
-                      <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                        EUROSTAT
-                      </Badge>
-                    </div>
-                    <div className="flex items-end justify-between">
-                      <div className="text-2xl font-bold text-blue-600">
-                        {price.price.toFixed(2)} €
-                      </div>
-                      <div className="text-xs text-slate-400">
-                        {price.year}{price.period ? `-${price.period.toString().padStart(2, '0')}` : ''}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* FAO Global Prices */}
-      <section className="py-12 bg-slate-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">🌍</span>
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">Qlobal İstehsalçı Qiymətləri</h2>
-                <p className="text-sm text-slate-500">FAO FAOSTAT mənbəsindən</p>
-              </div>
-            </div>
-            <a 
-              href="https://www.fao.org/faostat" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-sm text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
-            >
-              FAOSTAT <ExternalLink className="w-3 h-3" />
-            </a>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {latestFaoPrices.map((price) => (
-              <Link key={price.id} href={price.productSlug ? `/products/${price.productSlug}` : '/products'}>
-                <Card className="hover:shadow-lg hover:border-amber-200 transition-all duration-300 h-full">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <div className="font-semibold text-slate-900">{price.productName}</div>
-                        <div className="text-sm text-slate-500 flex items-center gap-1">
-                          {getFlagEmoji(price.countryCode)} {price.countryName}
-                        </div>
-                      </div>
-                      <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
-                        FAO
-                      </Badge>
-                    </div>
-                    <div className="flex items-end justify-between">
-                      <div className="text-2xl font-bold text-amber-600">
-                        {price.price.toFixed(0)} $
-                        <span className="text-sm font-normal text-slate-400">/ton</span>
-                      </div>
-                      <div className="text-xs text-slate-400">
-                        {price.year}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Countries with Data */}
-      <section className="py-12 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-slate-900">Mövcud Ölkə Dataları</h2>
-            <Link href="/countries" className="text-sm text-emerald-600 hover:text-emerald-700 flex items-center gap-1">
-              Hamısına bax <ChevronRight className="w-4 h-4" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {countriesWithData.map((country) => (
-              <Link
-                key={country.code}
-                href={`/countries/${country.code.toLowerCase()}`}
-                className="group"
-              >
-                <Card className="hover:shadow-lg hover:border-emerald-200 transition-all duration-300">
-                  <CardContent className="p-3 text-center">
-                    <div className="text-2xl mb-1">{getFlagEmoji(country.code)}</div>
-                    <div className="font-medium text-sm text-slate-900 group-hover:text-emerald-600 transition-colors truncate">
-                      {country.nameAz}
-                    </div>
-                    <div className="flex justify-center gap-1 mt-1">
-                      {country.euPrices > 0 && (
-                        <Badge variant="outline" className="text-[10px] px-1 py-0 bg-blue-50 text-blue-600 border-blue-200">
-                          EU
-                        </Badge>
-                      )}
-                      {country.faoPrices > 0 && (
-                        <Badge variant="outline" className="text-[10px] px-1 py-0 bg-amber-50 text-amber-600 border-amber-200">
-                          FAO
-                        </Badge>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section className="py-16 bg-gradient-to-br from-emerald-600 to-teal-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-white mb-4">Platforma İmkanları</h2>
-            <p className="text-lg text-emerald-100 max-w-2xl mx-auto">
-              AgriPrice sizə kənd təsərrüfatı bazarını anlamaq və qərarlar qəbul etmək üçün lazım olan bütün alətləri təqdim edir
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card className="bg-white/10 backdrop-blur-sm border-white/20">
-              <CardContent className="p-6 text-center">
-                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center mx-auto mb-4">
-                  <TrendingUp className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-lg font-semibold text-white mb-2">Real-vaxt izləmə</h3>
-                <p className="text-sm text-emerald-100">Həftəlik və aylıq qiymət dəyişikliklərini izləyin</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white/10 backdrop-blur-sm border-white/20">
-              <CardContent className="p-6 text-center">
-                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center mx-auto mb-4">
-                  <BarChart3 className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-lg font-semibold text-white mb-2">Müqayisəli analiz</h3>
-                <p className="text-sm text-emerald-100">Ölkələr və bazarlar arasında müqayisə</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white/10 backdrop-blur-sm border-white/20">
-              <CardContent className="p-6 text-center">
-                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center mx-auto mb-4">
-                  <Globe className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-lg font-semibold text-white mb-2">Qlobal data</h3>
-                <p className="text-sm text-emerald-100">FAO, Eurostat və yerli mənbələr</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white/10 backdrop-blur-sm border-white/20">
-              <CardContent className="p-6 text-center">
-                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center mx-auto mb-4">
-                  <Sparkles className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-lg font-semibold text-white mb-2">AI analitika</h3>
-                <p className="text-sm text-emerald-100">DeepSeek ilə ağıllı analiz (tezliklə)</p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-16 bg-white">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl font-bold text-slate-900 mb-4">
-            Limitsiz giriş əldə edin
-          </h2>
-          <p className="text-lg text-slate-600 mb-8 max-w-2xl mx-auto">
-            Bütün bazar trendlərinə və AI ilə gücləndirilmiş analizlərə tam giriş
-          </p>
-          <div className="flex items-center justify-center gap-4">
-            <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700" asChild>
-              <Link href="/register">
-                Pulsuz qeydiyyat
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Link>
-            </Button>
-            <Button size="lg" variant="outline" asChild>
-              <Link href="/products">Məhsullara bax</Link>
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* FOOTER */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
       <footer className="bg-slate-900 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
@@ -1005,48 +842,47 @@ export function MarketBriefClient({
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
                   <Leaf className="w-4 h-4 text-white" />
                 </div>
-                <span className="font-bold text-lg text-white">AgriPrice</span>
+                <span className="font-bold text-lg text-white">Agrai</span>
               </div>
               <p className="text-sm text-slate-400">
-                Azərbaycan və dünya kənd təsərrüfatı qiymət analizi platforması
+                AI-powered agricultural price intelligence platform
               </p>
             </div>
 
             <div>
-              <h4 className="font-semibold text-white mb-4">Platforma</h4>
+              <h4 className="font-semibold text-white mb-4">Platform</h4>
               <ul className="space-y-2 text-sm text-slate-400">
-                <li><Link href="/products" className="hover:text-white transition-colors">Məhsullar</Link></li>
-                <li><Link href="/markets" className="hover:text-white transition-colors">Bazarlar</Link></li>
-                <li><Link href="/countries" className="hover:text-white transition-colors">Ölkələr</Link></li>
-                <li><Link href="/dashboard" className="hover:text-white transition-colors">Dashboard</Link></li>
+                <li><Link href="/products" className="hover:text-white transition-colors">Products</Link></li>
+                <li><Link href="/countries" className="hover:text-white transition-colors">Countries</Link></li>
+                <li><Link href="/data-sources" className="hover:text-white transition-colors">Data Sources</Link></li>
               </ul>
             </div>
 
             <div>
-              <h4 className="font-semibold text-white mb-4">Mənbələr</h4>
+              <h4 className="font-semibold text-white mb-4">Sources</h4>
               <ul className="space-y-2 text-sm text-slate-400">
-                <li><a href="https://agro.gov.az" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1">agro.gov.az <ExternalLink className="w-3 h-3" /></a></li>
+                <li><a href="https://agro.gov.az" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1">Agro.gov.az <ExternalLink className="w-3 h-3" /></a></li>
+                <li><a href="https://www.fao.org/giews/food-prices" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1">FAO FPMA <ExternalLink className="w-3 h-3" /></a></li>
                 <li><a href="https://ec.europa.eu/eurostat" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1">Eurostat <ExternalLink className="w-3 h-3" /></a></li>
                 <li><a href="https://www.fao.org/faostat" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1">FAOSTAT <ExternalLink className="w-3 h-3" /></a></li>
               </ul>
             </div>
 
             <div>
-              <h4 className="font-semibold text-white mb-4">Əlaqə</h4>
+              <h4 className="font-semibold text-white mb-4">Legal</h4>
               <ul className="space-y-2 text-sm text-slate-400">
-                <li><Link href="/about" className="hover:text-white transition-colors">Haqqımızda</Link></li>
-                <li><Link href="/contact" className="hover:text-white transition-colors">Əlaqə</Link></li>
-                <li><Link href="/privacy" className="hover:text-white transition-colors">Məxfilik</Link></li>
+                <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
+                <li><Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link></li>
               </ul>
             </div>
           </div>
 
           <div className="border-t border-slate-800 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="text-sm text-slate-500">
-              © 2026 AgriPrice. Bütün hüquqlar qorunur.
+              © 2026 Agrai. All rights reserved.
             </div>
             <div className="flex items-center gap-4 text-sm text-slate-500">
-              <span>Data mənbələri: agro.gov.az, Eurostat, FAOSTAT</span>
+              <span>Powered by FAO FPMA, Eurostat, FAOSTAT, Agro.gov.az</span>
             </div>
           </div>
         </div>
@@ -1054,4 +890,3 @@ export function MarketBriefClient({
     </div>
   );
 }
-

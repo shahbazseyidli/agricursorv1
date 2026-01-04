@@ -3,8 +3,9 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { ProductPageClient } from "./client";
-import { Leaf, ChevronRight } from "lucide-react";
+import { Leaf, ChevronRight, Star, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -15,7 +16,6 @@ interface Props {
 async function getUserCountry(): Promise<string | null> {
   try {
     const headersList = await headers();
-    // Vercel provides country code in x-vercel-ip-country header
     const country = headersList.get("x-vercel-ip-country");
     return country?.toUpperCase() || null;
   } catch {
@@ -28,14 +28,11 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
   const globalProduct = await prisma.globalProduct.findUnique({
     where: { slug },
     include: {
-      // Global Category
       globalCategory: true,
-      // Product varieties
       productVarieties: {
         where: { isActive: true },
         orderBy: { slug: "asc" },
       },
-      // Local AZ products
       localProducts: {
         include: {
           category: true,
@@ -47,7 +44,6 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
           country: true,
         }
       },
-      // EU products
       euProducts: {
         include: {
           prices: {
@@ -57,7 +53,6 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
           }
         }
       },
-      // FAO products
       faoProducts: {
         include: {
           prices: {
@@ -67,7 +62,6 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
           }
         }
       },
-      // FPMA commodities
       fpmaCommodities: {
         include: {
           series: {
@@ -90,16 +84,11 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
     }
   });
 
-  // If GlobalProduct found, use it
   if (globalProduct) {
-    // Get AZ product data if available
     const azProduct = globalProduct.localProducts[0];
     
-    // Determine which country to show by default
-    // Priority: 1) URL country, 2) User's country (if has data), 3) AZ if has data, 4) First country with FPMA data
     let selectedCountry = countryCode?.toUpperCase();
     
-    // Get all countries with data for this product
     const countriesWithData = new Set<string>();
     if (azProduct) {
       countriesWithData.add("AZ");
@@ -112,19 +101,16 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
     });
     
     if (!selectedCountry) {
-      // No country in URL - try user's country first
       if (userCountry && countriesWithData.has(userCountry)) {
         selectedCountry = userCountry;
       } else if (azProduct) {
-        selectedCountry = "AZ"; // AZ has data
+        selectedCountry = "AZ";
       } else {
-        // Use first country with FPMA data
         const fpmaCountries = Array.from(countriesWithData);
         selectedCountry = fpmaCountries[0] || "AZ";
       }
     }
     
-    // Get markets (only for AZ)
     let markets: Awaited<ReturnType<typeof prisma.market.findMany>> = [];
     let latestPrices: Awaited<ReturnType<typeof prisma.price.findMany>> = [];
     
@@ -155,7 +141,6 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
       });
     }
 
-    // Get related products from GlobalProduct (same category)
     const relatedProducts = globalProduct.globalCategoryId 
       ? await prisma.globalProduct.findMany({
           where: {
@@ -182,7 +167,6 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
         })
       : [];
 
-    // Get all global products for dropdown
     const allProducts = await prisma.globalProduct.findMany({
       where: { isActive: true },
       select: {
@@ -196,7 +180,6 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
       orderBy: { nameAz: "asc" },
     });
 
-    // Get all global categories
     const allCategories = await prisma.globalCategory.findMany({
       where: { isActive: true },
       select: {
@@ -209,7 +192,6 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
       orderBy: { sortOrder: "asc" },
     });
 
-    // Get all countries from GlobalCountry
     const globalCountries = await prisma.globalCountry.findMany({
       where: { isActive: true },
       orderBy: [
@@ -228,7 +210,6 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
       }
     });
 
-    // Map to unified format
     const allCountries = globalCountries.map(c => ({
       id: c.id,
       name: c.nameAz || c.nameEn,
@@ -238,7 +219,6 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
       region: c.region,
     }));
 
-    // Get EU price data for this product
     const euPriceData = globalProduct.euProducts.flatMap(ep => 
       ep.prices.map(p => ({
         countryCode: p.country.code,
@@ -249,20 +229,17 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
       }))
     );
 
-    // Check data availability per source
     const hasAzData = globalProduct.localProducts.length > 0;
     const hasEuData = globalProduct.euProducts.length > 0;
     const hasFaoData = globalProduct.faoProducts.length > 0;
     const hasFpmaData = globalProduct.fpmaCommodities.length > 0;
 
-    // Get available data sources
     const dataSources = [];
     if (hasAzData) dataSources.push({ code: "AGRO_AZ", name: "Agro.gov.az", icon: "🇦🇿" });
     if (hasEuData) dataSources.push({ code: "EUROSTAT", name: "Eurostat", icon: "🇪🇺" });
     if (hasFaoData) dataSources.push({ code: "FAOSTAT", name: "FAOSTAT", icon: "🌍" });
     if (hasFpmaData) dataSources.push({ code: "FAO_FPMA", name: "FAO FPMA", icon: "📊" });
 
-    // Get all GlobalPriceStages from database for filtering
     const allGlobalPriceStages = await prisma.globalPriceStage.findMany({
       where: { isActive: true },
       orderBy: { sortOrder: "asc" },
@@ -274,26 +251,22 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
       }
     });
 
-    // Get FPMA price stages available for this product
     const fpmaSeriesWithPrices = globalProduct.fpmaCommodities.flatMap(c => c.series);
     const fpmaPriceStages = [...new Set(fpmaSeriesWithPrices
       .filter(s => s.globalPriceStage)
       .map(s => s.globalPriceStage!.code)
     )];
 
-    // Get AZ market types (which are linked to GlobalPriceStage)
     const azMarketTypeCodes = azProduct?.productTypes 
       ? [...new Set(markets.map(m => m.marketType?.code).filter(Boolean))]
       : [];
 
-    // Combine all available price stages
     const availablePriceStages = allGlobalPriceStages.filter(stage => 
       fpmaPriceStages.includes(stage.code) || 
       azMarketTypeCodes.includes(stage.code) ||
-      hasAzData // Include all for AZ as they use aggregates
+      hasAzData
     );
 
-    // Get FPMA markets available for this product (filtered by country if selected)
     let availableFpmaMarkets = [...new Set(fpmaSeriesWithPrices
       .filter(s => s.market && (!countryCode || s.country.iso3?.toLowerCase() === countryCode.toLowerCase() || s.country.iso2?.toLowerCase() === countryCode.toLowerCase()))
       .map(s => JSON.stringify({
@@ -304,7 +277,6 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
       }))
     )].map(s => JSON.parse(s));
     
-    // For AZ, also get GlobalMarkets including National Average options
     if (selectedCountry === "AZ") {
       const azGlobalMarkets = await prisma.globalMarket.findMany({
         where: {
@@ -317,7 +289,6 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
         ],
       });
       
-      // Add AZ GlobalMarkets to available markets (prioritize National Average)
       const azMarketsList = azGlobalMarkets.map(m => ({
         id: m.id,
         name: m.nameAz || m.name,
@@ -326,14 +297,12 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
         isNationalAvg: m.isNationalAvg,
       }));
       
-      // Put National Average options first
       availableFpmaMarkets = [
         ...azMarketsList.filter(m => m.isNationalAvg),
         ...azMarketsList.filter(m => !m.isNationalAvg),
       ];
     }
 
-    // Get FPMA countries with data
     const fpmaCountriesWithData = [...new Set(fpmaSeriesWithPrices
       .filter(s => s.prices && s.prices.length > 0)
       .map(s => JSON.stringify({
@@ -343,20 +312,22 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
       }))
     )].map(s => JSON.parse(s));
 
-    // Prepare category info from GlobalCategory
     const categoryInfo = globalProduct.globalCategory ? {
       id: globalProduct.globalCategory.id,
       name: globalProduct.globalCategory.nameAz || globalProduct.globalCategory.nameEn,
       slug: globalProduct.globalCategory.slug,
-    } : { id: "", name: "Digər", slug: "other" };
+    } : { id: "", name: "Other", slug: "other" };
 
-    // Prepare product varieties
     const productVarieties = globalProduct.productVarieties.map(v => ({
       id: v.id,
       slug: v.slug,
       name: v.nameAz || v.nameEn,
       hsCode: v.hsCode,
     }));
+
+    // Count data coverage
+    const euCountries = new Set(globalProduct.euProducts.flatMap(ep => ep.prices.map(p => p.country.code))).size;
+    const faoCountries = new Set(globalProduct.faoProducts.flatMap(fp => fp.prices.map(p => p.country.code))).size;
 
     return {
       isGlobal: true,
@@ -369,7 +340,7 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
         unit: globalProduct.defaultUnit,
         category: categoryInfo,
         productTypes: azProduct?.productTypes || [],
-        country: { id: "", name: "Azərbaycan", iso2: "AZ" }
+        country: { id: "", name: "Azerbaijan", iso2: "AZ" }
       },
       markets,
       latestPrices,
@@ -409,10 +380,11 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
       availableFpmaMarkets,
       fpmaCountriesWithData,
       productImage: globalProduct.image,
+      countryCount: 1 + euCountries + faoCountries + fpmaCountriesWithData.length,
     };
   }
 
-  // Fall back to local AZ product (and create GlobalProduct reference if needed)
+  // Fall back to local AZ product
   const product = await prisma.product.findFirst({
     where: { slug },
     include: {
@@ -463,7 +435,6 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
     },
   });
 
-  // Get all global products for dropdown
   const allProducts = await prisma.globalProduct.findMany({
     where: { isActive: true },
     select: {
@@ -476,7 +447,6 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
     orderBy: { nameAz: "asc" },
   });
 
-  // Get all global categories
   const allCategories = await prisma.globalCategory.findMany({
     where: { isActive: true },
     select: {
@@ -488,7 +458,6 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
     orderBy: { sortOrder: "asc" },
   });
 
-  // Get all countries from GlobalCountry
   const globalCountries = await prisma.globalCountry.findMany({
     where: { isActive: true },
     orderBy: [{ isFeatured: "desc" }, { nameEn: "asc" }],
@@ -556,6 +525,7 @@ async function getProductData(slug: string, countryCode?: string, userCountry?: 
     availableFpmaMarkets: [],
     fpmaCountriesWithData: [],
     productImage: null,
+    countryCount: 1,
   };
 }
 
@@ -563,7 +533,6 @@ export default async function ProductPage({ params, searchParams }: Props) {
   const { slug } = await params;
   const { country } = await searchParams;
   
-  // Get user's country from IP (Vercel provides this)
   const userCountry = await getUserCountry();
   
   const data = await getProductData(slug, country, userCountry);
@@ -592,9 +561,9 @@ export default async function ProductPage({ params, searchParams }: Props) {
     availableFpmaMarkets,
     fpmaCountriesWithData,
     productImage,
+    countryCount,
   } = data;
 
-  // Prepare product info for Tridge-style rich content
   const productInfo = globalProduct ? {
     descriptionAz: globalProduct.descriptionAz,
     descriptionEn: globalProduct.descriptionEn,
@@ -611,75 +580,99 @@ export default async function ProductPage({ params, searchParams }: Props) {
     fpmaCode: globalProduct.fpmaCode,
   } : null;
 
+  // Calculate latest price for hero KPI
+  const latestPrice = latestPrices[0];
+  const priceChange = latestPrices.length >= 2 
+    ? ((latestPrices[0]?.priceAvg - latestPrices[1]?.priceAvg) / latestPrices[1]?.priceAvg * 100)
+    : 0;
+
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
+      {/* Sticky Header */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                <Leaf className="w-5 h-5 text-white" />
-              </div>
-              <span className="font-bold text-xl text-slate-900">AgriPrice</span>
-            </Link>
-            <nav className="hidden md:flex items-center gap-8">
-              <Link
-                href="/categories"
-                className="text-sm font-medium text-slate-600 hover:text-slate-900"
-              >
-                Kateqoriyalar
+            <div className="flex items-center gap-4">
+              <Link href="/" className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                  <Leaf className="w-5 h-5 text-white" />
+                </div>
+                <span className="font-bold text-xl text-slate-900">Agrai</span>
               </Link>
-              <Link
-                href="/products"
-                className="text-sm font-medium text-emerald-600"
-              >
-                Məhsullar
-              </Link>
-              <Link
-                href="/countries"
-                className="text-sm font-medium text-slate-600 hover:text-slate-900"
-              >
-                Ölkələr
-              </Link>
-              <Link
-                href="/dashboard"
-                className="text-sm font-medium text-slate-600 hover:text-slate-900"
-              >
-                Dashboard
-              </Link>
-            </nav>
-            <Button asChild>
-              <Link href="/login">Daxil ol</Link>
-            </Button>
+              
+              {/* Breadcrumb in header */}
+              <nav className="hidden md:flex items-center gap-2 text-sm text-slate-500 ml-4 pl-4 border-l border-slate-200">
+                <Link href="/products" className="hover:text-emerald-600">Products</Link>
+                <ChevronRight className="w-4 h-4" />
+                <span className="font-medium text-slate-900">{product.name}</span>
+              </nav>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="sm" className="hidden md:flex items-center gap-2">
+                <Star className="w-4 h-4" /> Follow
+              </Button>
+              <Button variant="outline" size="sm" className="hidden md:flex items-center gap-2">
+                <Share2 className="w-4 h-4" /> Share
+              </Button>
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Breadcrumb */}
-      <div className="bg-white border-b border-slate-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <nav className="flex items-center gap-2 text-sm text-slate-500">
-            <Link href="/" className="hover:text-slate-700">
-              Ana səhifə
-            </Link>
-            <ChevronRight className="w-4 h-4" />
-            <Link href="/products" className="hover:text-slate-700">
-              Məhsullar
-            </Link>
-            <ChevronRight className="w-4 h-4" />
-            <Link
-              href={`/categories/${product.category?.slug || "other"}`}
-              className="hover:text-slate-700"
-            >
-              {product.category?.name || "Digər"}
-            </Link>
-            <ChevronRight className="w-4 h-4" />
-            <span className="text-slate-900 font-medium">{product.name}</span>
-          </nav>
-        </div>
-      </div>
+      {/* Hero Section with KPIs */}
+      <section className="pt-20 pb-6 bg-white border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-start gap-6 py-6">
+            {/* Product Image */}
+            <div className="w-20 h-20 rounded-2xl bg-slate-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
+              {productImage ? (
+                <img src={productImage} alt={product.name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-4xl">🌾</span>
+              )}
+            </div>
+            
+            {/* Product Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <Badge variant="outline" className="text-xs">
+                  {product.category?.name || "Other"}
+                </Badge>
+                {dataSources.map(ds => (
+                  <Badge key={ds.code} variant="outline" className="text-xs">
+                    {ds.icon} {ds.name}
+                  </Badge>
+                ))}
+              </div>
+              <h1 className="text-3xl font-bold text-slate-900 mb-2">{product.name}</h1>
+              <p className="text-slate-500">{product.nameEn}</p>
+            </div>
 
+            {/* Hero KPIs */}
+            <div className="hidden lg:flex items-center gap-6">
+              <div className="text-center px-4 border-l border-slate-200">
+                <div className="text-2xl font-bold text-slate-900">
+                  {latestPrice ? `$${latestPrice.priceAvg?.toFixed(2) || "—"}` : "—"}
+                </div>
+                <div className="text-xs text-slate-500">Latest Price</div>
+              </div>
+              <div className="text-center px-4 border-l border-slate-200">
+                <div className={`text-2xl font-bold ${priceChange >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {priceChange ? `${priceChange >= 0 ? '+' : ''}${priceChange.toFixed(1)}%` : "—"}
+                </div>
+                <div className="text-xs text-slate-500">1Y Change</div>
+              </div>
+              <div className="text-center px-4 border-l border-slate-200">
+                <div className="text-2xl font-bold text-slate-900">{countryCount}</div>
+                <div className="text-xs text-slate-500">Countries</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Main Content with Tabs */}
       <ProductPageClient
         product={product}
         markets={markets}
@@ -701,6 +694,19 @@ export default async function ProductPage({ params, searchParams }: Props) {
         fpmaCountriesWithData={fpmaCountriesWithData}
         productImage={productImage}
       />
+
+      {/* Footer */}
+      <footer className="bg-slate-900 py-8 px-4 mt-12">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Leaf className="w-5 h-5 text-emerald-400" />
+            <span className="font-bold text-white">Agrai</span>
+          </div>
+          <div className="text-sm text-slate-400">
+            © 2026 Agrai. Powered by FAO, Eurostat, FAOSTAT
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
